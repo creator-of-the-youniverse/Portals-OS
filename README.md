@@ -521,3 +521,141 @@ Your intelligence.
 Your work.
 
 Your future.
+
+---
+
+# The Core Architectural Principle
+
+Portals OS is not a collection of unrelated AI applications.
+
+It is the operating environment through which a person's Youniverse is accessed.
+
+The system is organized around a strict separation of responsibilities:
+
+- **Portals OS** — the personal operating environment and present workspace.
+- **Oracle** — the diagnostic and orchestration intelligence.
+- **Nexus** — the specialist problem-solving workforce.
+- **Agents** — independent specialists; each agent addresses one specific pain point and produces one defined deliverable.
+- **NotNotes** — the active workbench where agent outputs and case materials are collected.
+- **Books OS** — the user's persistent long-term memory and archive.
+- **Omnedia** — intelligence about the user's activity and performance in the external digital world.
+- **ONES** — the long-horizon, 80-year perspective.
+
+## The Rule
+
+> **One agent. One pain point. One deliverable.**
+
+Agents are independently usable applications and can be exposed through their own ItsYouOnline subdomains. They can also be launched as PWA applications inside Portals OS in their own windows.
+
+Agents do not form an uncontrolled swarm.
+
+The intended communication pattern is:
+
+```text
+                    ORACLE
+                   /  |  \
+                  /   |   \
+                 ▼    ▼    ▼
+              AGENT AGENT AGENT
+                 │    │    │
+                 └────┼────┘
+                      ▼
+                  NOTNOTES
+                      │
+                      ▼
+                FINAL ARTIFACT
+
+The Oracle diagnoses the larger problem — the bleeding neck — and determines which specialist agents are needed.
+Each specialist solves its assigned pain point.
+NotNotes collects the resulting deliverables.
+The Oracle synthesizes the work into a final artifact.
+Completed artifacts become part of the user's permanent Books OS record.
+The Memory Cycle
+Books OS is structured as a longitudinal record of the user's life and work.
+Each weekly shelf contains:
+
+This creates three distinct perspectives:
+
+What happened.
+
+What the user said about what happened.
+
+What the AI believes it means.
+
+Completed project and Nexus artifacts are incorporated into Book 8 alongside the weekly record.
+
+Over time, Books becomes the user's longitudinal memory.
+
+That memory can then inform the Oracle and the ONES 80-year perspective.
+
+The Complete Loop
+
+Book 1  — Sunday
+Book 2  — Monday
+Book 3  — Tuesday
+Book 4  — Wednesday
+Book 5  — Thursday
+Book 6  — Friday
+Book 7  — Saturday
+
+Book 8  — Weekly Summary + Completed Artifacts
+Book 9  — User's Writing
+Book 10 — AI's Overall Take
+
+                    EXPERIENCE
+                         │
+                         ▼
+                    PORTALS OS
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+        BOOKS          OMNEDIA         ONES
+        PAST             NOW          FUTURE
+          │              │              │
+          └──────────────┼──────────────┘
+                         ▼
+                       ORACLE
+                         │
+                     DIAGNOSIS
+                         │
+                         ▼
+                   BLEEDING NECK
+                         │
+                         ▼
+                      NEXUS
+                         │
+                    SPECIALISTS
+                         │
+                         ▼
+                     NOTNOTES
+                         │
+                         ▼
+                  FINAL ARTIFACT
+                         │
+                         ▼
+                       BOOKS
+                         │
+                         ▼
+                    LONG MEMORY
+                         │
+                         ▼
+                       ONES
+
+The resulting system is a continuous cycle:
+
+Experience → Memory → Understanding → Action → Artifact → Memory → Long-term Perspective
+
+The Youniverse
+
+ItsYouOnline is the platform layer that gives each person their own persistent place on the internet.
+
+A user's personal environment can be addressed through their own identity and subdomain:
+
+username.itsyouonline.com
+
+The same Portals OS architecture can therefore become a different universe for every person.
+
+The platform provides the operating environment.
+
+The user provides the universe.
+
