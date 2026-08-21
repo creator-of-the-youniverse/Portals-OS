@@ -4,7 +4,7 @@
   "version": "1.2.0",
   "type": "module",
   "scripts": {
-    "dev": "start /b node server.js && vite",
+    "dev": "node server.js & vite --host 0.0.0.0",
     "server": "node server.js",
     "start": "npm run server & npm run dev",
     "build": "vite build",
