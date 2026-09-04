@@ -17,7 +17,6 @@ export interface YouniverseIdentityRecord {
   identityId: string;
   username: string;
   displayName: string;
-  email: string;
   subdomain: string;
   identityType: YouniverseIdentityType;
   createdAt: string;
