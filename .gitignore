@@ -29,3 +29,9 @@ dist-ssr
 .env*.local
 
 .ai/
+
+# Local AI/provider agent tooling
+.agents/
+.claude/
+agent/
+skills-lock.json
