@@ -17,6 +17,8 @@ import "../components/WelcomeScreen.css";
 import { AsmrBackground } from "../components/AsmrBackground";
 // Shatter button component
 import { Component as ShatterButton } from "../@/components/ui/shatter-button";
+import { createYouniverseDiscovery } from "../lib/youniverseDiscovery";
+import { createYouniverseIdentityApiResolver } from "../services/youniverseIdentityService";
 
 // ============================================================================
 // AUDIO CONSTANTS
@@ -254,6 +256,7 @@ const WelcomeScreen: React.FC = () => {
   const [isFadingOut, setIsFadingOut] = useState(false);  // Controls exit animation
   const [isShatterAnimating, setIsShatterAnimating] = useState(false); // Controls shatter animation delay
   const [showEmailEntry, setShowEmailEntry] = useState(false); // ALWAYS require the user to press the button to reveal email entry
+  const [pendingYouniverseSubdomain, setPendingYouniverseSubdomain] = useState<string | null>(null);
 
   // ------------------------------------------------------------------------
   // HANDLER: Random Welcome Audio
@@ -295,16 +298,15 @@ const WelcomeScreen: React.FC = () => {
 
 
   // ------------------------------------------------------------------------
-  // VALIDATOR: Email Format
   // ------------------------------------------------------------------------
-  // Checks if input is valid email or special admin code "trad34"
-  const isValidEmail = (email: string) => {
-    if (email.toLowerCase() === "trad34") return true;  // Admin bypass
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+  // YOUNIVERSE DISCOVERY
+  // ------------------------------------------------------------------------
+  // The @ Line resolves a human identity through the authoritative
+  // ItsYouOnline identity API before crossing to that Youniverse.
+  const youniverseDiscovery = createYouniverseDiscovery(
+    createYouniverseIdentityApiResolver()
+  );
 
-  // ------------------------------------------------------------------------
   // HANDLER: Skip Microphone Permission
   // ------------------------------------------------------------------------
   // Sets mic permission to false and triggers fade-out animation
@@ -328,21 +330,42 @@ const WelcomeScreen: React.FC = () => {
   // Called when fade-out animation finishes, proceeds to main app
   const onFadeOutComplete = () => {
     proceedWithWelcome();
-  };
 
-  // ------------------------------------------------------------------------
-  // HANDLER: Email Submission
-  // ------------------------------------------------------------------------
-  // Main flow: validate → save email → play audio → start exit animation
-  const handleEmailSubmit = (email: string) => {
-    if (isValidEmail(email)) {
-      addEmail(email);              // Save to global state
-      playRandomWelcomeMessage();   // Play random greeting
-      skipMicPermission();          // Skip mic setup and begin exit
+    if (pendingYouniverseSubdomain) {
+      window.location.href = `https://${pendingYouniverseSubdomain}`;
     }
   };
 
   // ------------------------------------------------------------------------
+  // HANDLER: YOUNIVERSE IDENTITY SUBMISSION
+  // ------------------------------------------------------------------------
+  // Main flow: human identity → authoritative resolution → Youniverse.
+  const handleEmailSubmit = async (identityInput: string) => {
+    const discovery = await youniverseDiscovery.discover(identityInput);
+
+    if (
+      discovery.status !== "found" ||
+      !discovery.resolution.identity
+    ) {
+      console.log(
+        "Youniverse identity not found:",
+        discovery.status
+      );
+      return;
+    }
+
+    const subdomain = discovery.resolution.identity.subdomain;
+
+    if (!subdomain) {
+      console.log("Youniverse identity has no subdomain");
+      return;
+    }
+
+    playRandomWelcomeMessage();
+    setPendingYouniverseSubdomain(subdomain);
+    skipMicPermission();
+  };
+
   // HANDLER: Shatter Button Click
   // ------------------------------------------------------------------------
   // Explodes the button and shows the email field after animation completes
@@ -425,7 +448,7 @@ const WelcomeScreen: React.FC = () => {
             className="flex flex-col items-center w-full"
           >
             <EmailFieldComponent
-              placeholder="Enter Email"
+              placeholder="Creator Of The Youniverse"
               onSubmit={handleEmailSubmit}
               disabled={false}
             />
