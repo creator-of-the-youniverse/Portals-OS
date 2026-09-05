@@ -1,6 +1,6 @@
-import { createNeonYouniverseIdentityRepository } from "../lib/neonYouniverseIdentityRepository";
-import { createYouniverseIdentityResolver } from "../lib/youniverseRepositoryIdentityResolver";
-import { createYouniverseIdentityHandler } from "../lib/youniverseIdentityApi";
+import { createNeonYouniverseIdentityRepository } from "../lib/neonYouniverseIdentityRepository.js";
+import { createYouniverseIdentityResolver } from "../lib/youniverseRepositoryIdentityResolver.js";
+import { createYouniverseIdentityHandler } from "../lib/youniverseIdentityApi.js";
 
 export default async function handler(req: any, res: any) {
   const databaseUrl = process.env.DATABASE_URL;
