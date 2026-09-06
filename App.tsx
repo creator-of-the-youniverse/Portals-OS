@@ -4,6 +4,8 @@ import { useKernel } from "./store/kernel";
 import Desktop from "./components/Desktop";
 import Window from "./components/Window";
 import WelcomeScreen from "./components/WelcomeScreen";
+import PublicYouniverse from "./components/PublicYouniverse";
+import { useYouniverse } from "./components/YouniverseProvider";
 import Sidebar from "./components/Sidebar";
 import VoiceAssistant from "./components/VoiceAssistant";
 import VoiceAssistantOverlay from "./components/VoiceAssistantOverlay";
@@ -23,6 +25,8 @@ import { Analytics } from "@vercel/analytics/react";
 const App: React.FC = () => {
   const windows = useKernel((state) => state.windows);
   const hasWelcomed = useKernel((state) => state.hasWelcomed);
+  const { identity } = useYouniverse();
+  const isYouniverseRoute = identity?.kind === "identity";
   const setHasWelcomed = useKernel((state) => state.setHasWelcomed);
   const projectFolders = useKernel((state) => state.projectFolders);
 
@@ -129,7 +133,9 @@ const App: React.FC = () => {
 
   return (
     <AnimatePresence mode="sync">
-      {!hasWelcomed ? (
+      {isYouniverseRoute ? (
+        <PublicYouniverse key="youniverse" />
+      ) : !hasWelcomed ? (
         <WelcomeScreen key="welcome" />
       ) : (
         <motion.div
