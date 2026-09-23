@@ -75,6 +75,20 @@ export const APPS_CONFIG: Record<BuiltInAppId, AppDefinition> = {
     component: lazy(() => import("./apps/Settings")),
     description: "System settings.",
   },
+  omniedia: {
+    id: "omniedia" as BuiltInAppId,
+    name: "Omniedia",
+    icon: Sparkles,
+    component: lazy(() => import("./apps/OmniediaApp")),
+    description: "Social media analytics and gamification ranking.",
+  },
+  messages: {
+    id: "messages" as BuiltInAppId,
+    name: "Messages",
+    icon: ContactIcon,
+    component: lazy(() => import("./apps/MessagesApp")),
+    description: "Public message board.",
+  },
 };
 
 export const APPS = Object.values(APPS_CONFIG);
@@ -89,6 +103,8 @@ const CORE_APP_IDS: BuiltInAppId[] = [
   "contact",
   "fileManager",
   "settings",
+  "omniedia" as BuiltInAppId,
+  "messages" as BuiltInAppId,
 ];
 
 /**
