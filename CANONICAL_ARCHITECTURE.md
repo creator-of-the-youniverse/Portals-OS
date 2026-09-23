@@ -347,6 +347,35 @@ Oracle determines how to approach a particular problem.
 
 ---
 
+12.1 WEAVER
+
+Weaver is the spatial architect and in-system builder of Portals OS.
+
+Weaver is based on the Agent Zero "Space Agent" paradigm.
+
+Weaver is responsible for:
+
+- generative widget synthesis ("I want a widget that...")
+- dynamic spatial and layout orchestration ("I want this space to be...")
+- real-time chromatic and aesthetic theming ("Change the whole theme color to...")
+- custom environment configuration tailored to user workflow
+
+The separation across the intelligence layer is therefore:
+
+ONEAI
+«Who travels with you» — Continuity, identity, memory, long-term personal intelligence
+
+WEAVER
+«Who shapes your reality» — Spatial builder, widget generator, environment architect
+
+ORACLE
+«What should we do about this» — Diagnosis, reasoning, tactical planning, agent orchestration
+
+NEXUS
+«The fleet that executes» — Sovereign specialty agents solving concrete business pain points
+
+---
+
 13. NEXUS
 
 Nexus is the coordination layer.

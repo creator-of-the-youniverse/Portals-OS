@@ -7,7 +7,7 @@ import { bootstrapYouniverse } from './lib/youniverseBootstrap';
 import { YouniverseProvider } from './components/YouniverseProvider';
 import './index.css';
 
-const youniverseBootstrap = bootstrapYouniverse(window.location.hostname);
+const youniverseBootstrap = bootstrapYouniverse(window.location.hostname, window.location.search);
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
@@ -23,3 +23,18 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// Register sovereign offline service worker for PWA support
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((registration) => {
+        console.log('[PWA] Sovereign Service Worker active:', registration.scope);
+      })
+      .catch((err) => {
+        console.warn('[PWA] Service Worker registration failed:', err);
+      });
+  });
+}
+

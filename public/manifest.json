@@ -1,0 +1,49 @@
+{
+  "name": "The Youniverse | Sovereign AI Operating System",
+  "short_name": "Youniverse",
+  "description": "The Sovereign AI Operating System — Build your brand from zero, command autonomous agent platoons, and unlock money-while-you-sleep monetization.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#050508",
+  "theme_color": "#0a0a0f",
+  "categories": ["productivity", "business", "utilities", "finance"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/images/you.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "ONEAI Sovereign Companion",
+      "short_name": "ONEAI",
+      "description": "Open your sovereign client-side AI companion",
+      "url": "/",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "The Oracle Commander",
+      "short_name": "Oracle",
+      "description": "Diagnose business pain points and command the Nexus fleet",
+      "url": "/",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Calendar, ChevronUp, ChevronLeft, ChevronRight, Volume2, Bell, Plus, X, Trash2 } from 'lucide-react';
+import { Clock, Calendar, ChevronUp, ChevronLeft, ChevronRight, Volume2, Bell, Plus, X, Trash2, Download } from 'lucide-react';
 import { useKernel } from '../store/kernel';
 
 /**
@@ -210,7 +210,17 @@ const SystemTray: React.FC = () => {
     const selectedDateObj = selectedDate ? new Date(selectedDate + 'T00:00:00') : null;
 
     return (
-        <div className="fixed top-2 right-4 z-50 flex items-center gap-1">
+        <div className="fixed top-2 right-4 z-50 flex items-center gap-1.5">
+            {/* Install PWA Button */}
+            <button
+                onClick={() => window.dispatchEvent(new CustomEvent('open-pwa-install'))}
+                className="px-2 py-1 bg-cyan-500/10 hover:bg-cyan-500/25 border border-cyan-500/30 hover:border-cyan-400/60 text-cyan-300 rounded-lg transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,255,255,0.15)] group"
+                title="Install The Youniverse (Offline PWA)"
+            >
+                <Download size={13} className="text-cyan-400 group-hover:scale-110 transition-transform" />
+                <span className="hidden sm:inline text-[11px] font-medium tracking-wide">Install</span>
+            </button>
+
             {/* Volume */}
             <div className="relative" ref={volumeRef}>
                 <button

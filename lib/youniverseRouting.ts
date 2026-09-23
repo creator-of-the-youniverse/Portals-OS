@@ -16,7 +16,7 @@
 
 export const YOUNIVERSE_ROOT_DOMAIN = "itsyouonline.com";
 
-export type YouniverseRouteKind = "gateway" | "identity";
+export type YouniverseRouteKind = "gateway" | "identity" | "claim";
 
 export interface YouniverseRoute {
   kind: YouniverseRouteKind;
@@ -50,12 +50,51 @@ function normalizeHostname(hostname: string): string {
  * Unknown domains return null.
  */
 export function resolveYouniverseRoute(
-  hostname: string
+  hostname: string,
+  search?: string
 ): YouniverseRoute | null {
   const normalized = normalizeHostname(hostname);
 
   if (!normalized) {
     return null;
+  }
+
+  // Handle local development & preview domains with query params
+  // Supported params:
+  //   ?@=handle or ?u=handle or ?username=handle  → identity route
+  //   ?claim=handle                               → claim route (mirrors claim.itsyouonline.com)
+  if (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized.endsWith(".vercel.app")
+  ) {
+    if (search) {
+      const params = new URLSearchParams(search);
+
+      // Claim route (dev equivalent of claim.itsyouonline.com/?handle=name)
+      const claimHandle = params.get("claim");
+      if (claimHandle) {
+        return {
+          kind: "claim",
+          hostname: normalized,
+        };
+      }
+
+      // Identity route
+      const queryUsername = params.get("@") || params.get("u") || params.get("username");
+      if (queryUsername) {
+        const cleanUser = queryUsername.trim().toLowerCase().replace(/^@/, "");
+        return {
+          kind: "identity",
+          hostname: normalized,
+          username: cleanUser,
+        };
+      }
+    }
+    return {
+      kind: "gateway",
+      hostname: normalized,
+    };
   }
 
   if (
@@ -64,6 +103,14 @@ export function resolveYouniverseRoute(
   ) {
     return {
       kind: "gateway",
+      hostname: normalized,
+    };
+  }
+
+  // Dedicated Claim subdomain
+  if (normalized === `claim.${YOUNIVERSE_ROOT_DOMAIN}`) {
+    return {
+      kind: "claim",
       hostname: normalized,
     };
   }

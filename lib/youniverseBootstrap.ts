@@ -30,9 +30,10 @@ export interface YouniverseBootstrap {
  * deterministic and easy to test.
  */
 export function bootstrapYouniverse(
-  hostname: string
+  hostname: string,
+  search?: string
 ): YouniverseBootstrap {
   return {
-    identity: resolveYouniverseIdentity(hostname),
+    identity: resolveYouniverseIdentity(hostname, search),
   };
 }

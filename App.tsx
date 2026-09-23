@@ -5,6 +5,7 @@ import Desktop from "./components/Desktop";
 import Window from "./components/Window";
 import WelcomeScreen from "./components/WelcomeScreen";
 import PublicYouniverse from "./components/PublicYouniverse";
+import ClaimYouniverse from "./components/ClaimYouniverse";
 import { useYouniverse } from "./components/YouniverseProvider";
 import Sidebar from "./components/Sidebar";
 import VoiceAssistant from "./components/VoiceAssistant";
@@ -21,6 +22,7 @@ import {
 
 import { motion, AnimatePresence } from "framer-motion";
 import { Analytics } from "@vercel/analytics/react";
+import { PwaInstallPrompt } from "./components/PwaInstallPrompt";
 
 const App: React.FC = () => {
   const windows = useKernel((state) => state.windows);
@@ -29,6 +31,33 @@ const App: React.FC = () => {
   const isYouniverseRoute = identity?.kind === "identity";
   const setHasWelcomed = useKernel((state) => state.setHasWelcomed);
   const projectFolders = useKernel((state) => state.projectFolders);
+
+  const isClaimRoute = identity?.kind === "claim";
+
+  // Subdomain Portals OS active state
+  // Use useEffect so we can safely read localStorage after identity resolves
+  const [subdomainOsActive, setSubdomainOsActive] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (identity?.username) {
+      const stored = localStorage.getItem(`youniverse_os_active_${identity.username}`);
+      const params = new URLSearchParams(window.location.search);
+      if (stored === "true" || params.get("mode") === "os" || params.get("enter") === "true") {
+        setSubdomainOsActive(true);
+      }
+    }
+  }, [identity?.username]);
+
+  const enterSubdomainOs = useCallback(() => {
+    setSubdomainOsActive(true);
+    if (identity?.username) {
+      localStorage.setItem(`youniverse_os_active_${identity.username}`, "true");
+    }
+  }, [identity?.username]);
+
+  const viewPublicShowcase = useCallback(() => {
+    setSubdomainOsActive(false);
+  }, []);
 
   const theme = useKernel((state) => state.theme);
   const lastPerformanceLogTime = useRef(0);
@@ -131,18 +160,24 @@ const App: React.FC = () => {
   }, [addDeliverable, setAgentStatus]);
 
 
+  const showClaimRoute = isClaimRoute;
+  const showPublicYouniverse = isYouniverseRoute && !subdomainOsActive;
+  const showWelcome = !isYouniverseRoute && !isClaimRoute && !hasWelcomed;
+
   return (
     <AnimatePresence mode="sync">
-      {isYouniverseRoute ? (
-        <PublicYouniverse key="youniverse" />
-      ) : !hasWelcomed ? (
+      {showClaimRoute ? (
+        <ClaimYouniverse key="claim" />
+      ) : showPublicYouniverse ? (
+        <PublicYouniverse key="youniverse" onEnterOs={enterSubdomainOs} />
+      ) : showWelcome ? (
         <WelcomeScreen key="welcome" />
       ) : (
         <motion.div
           key="main"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 3 }}
+          transition={{ duration: 1.5 }}
           className="fixed inset-0 overflow-hidden bg-black font-sans"
         >
           <Desktop>
@@ -172,6 +207,21 @@ const App: React.FC = () => {
             })}
           </Desktop>
 
+          {/* Subdomain Mode Indicator / Public Toggle */}
+          {isYouniverseRoute && (
+            <div className="fixed top-2.5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full border border-purple-500/40 bg-black/70 px-3.5 py-1 text-xs text-purple-200 backdrop-blur-md shadow-[0_0_20px_rgba(168,85,247,0.3)]">
+              <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+              <span className="font-mono font-medium">@{identity?.username} Portals OS</span>
+              <button
+                onClick={viewPublicShowcase}
+                className="ml-2 rounded-md bg-white/10 px-2 py-0.5 text-[10px] text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+                title="Switch to Public Showcase Page"
+              >
+                Public Page
+              </button>
+            </div>
+          )}
+
           <Sidebar />
           <VoiceAssistant />
           <VoiceAssistantOverlay />
@@ -180,6 +230,7 @@ const App: React.FC = () => {
         </motion.div>
       )}
       <Analytics />
+      <PwaInstallPrompt />
     </AnimatePresence>
   );
 };

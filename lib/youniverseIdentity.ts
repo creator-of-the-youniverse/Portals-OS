@@ -19,7 +19,7 @@ import {
   type YouniverseRoute,
 } from "./youniverseRouting";
 
-export type YouniverseIdentityKind = "gateway" | "identity";
+export type YouniverseIdentityKind = "gateway" | "identity" | "claim";
 
 export interface YouniverseIdentity {
   kind: YouniverseIdentityKind;
@@ -31,10 +31,11 @@ export interface YouniverseIdentity {
  * Resolve the structural identity represented by a hostname.
  */
 export function resolveYouniverseIdentity(
-  hostname: string
+  hostname: string,
+  search?: string
 ): YouniverseIdentity | null {
   const route: YouniverseRoute | null =
-    resolveYouniverseRoute(hostname);
+    resolveYouniverseRoute(hostname, search);
 
   if (!route) {
     return null;
@@ -43,6 +44,13 @@ export function resolveYouniverseIdentity(
   if (route.kind === "gateway") {
     return {
       kind: "gateway",
+      hostname: route.hostname,
+    };
+  }
+
+  if (route.kind === "claim") {
+    return {
+      kind: "claim",
       hostname: route.hostname,
     };
   }

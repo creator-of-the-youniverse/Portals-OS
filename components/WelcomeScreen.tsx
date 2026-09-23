@@ -19,6 +19,7 @@ import { AsmrBackground } from "../components/AsmrBackground";
 import { Component as ShatterButton } from "../@/components/ui/shatter-button";
 import { createYouniverseDiscovery } from "../lib/youniverseDiscovery";
 import { createYouniverseIdentityApiResolver } from "../services/youniverseIdentityService";
+import { Download } from "lucide-react";
 
 // ============================================================================
 // AUDIO CONSTANTS
@@ -327,43 +328,114 @@ const WelcomeScreen: React.FC = () => {
   // ------------------------------------------------------------------------
   // HANDLER: Animation Complete Callback
   // ------------------------------------------------------------------------
-  // Called when fade-out animation finishes, proceeds to main app
+  // HANDLER: Animation Complete Callback
+  // ------------------------------------------------------------------------
+  // Called when fade-out animation finishes, proceeds to main app or subdomain
   const onFadeOutComplete = () => {
     proceedWithWelcome();
 
     if (pendingYouniverseSubdomain) {
-      window.location.href = `https://${pendingYouniverseSubdomain}`;
+      const currentHost = window.location.hostname;
+      // In local development, route with ?@=handle so it stays in the local dev server
+      if (
+        currentHost === "localhost" ||
+        currentHost === "127.0.0.1" ||
+        currentHost.includes("vercel.app")
+      ) {
+        const handle = pendingYouniverseSubdomain.split(".")[0];
+        window.location.href = `/?@=${handle}`;
+      } else {
+        window.location.href = `https://${pendingYouniverseSubdomain}`;
+      }
     }
   };
 
   // ------------------------------------------------------------------------
+  // LOCAL STATE: @ Line discovery feedback
+  // ------------------------------------------------------------------------
+  const [atLineStatus, setAtLineStatus] = useState<"idle" | "loading" | "error">("idle");
+
+  // ------------------------------------------------------------------------
   // HANDLER: YOUNIVERSE IDENTITY SUBMISSION
   // ------------------------------------------------------------------------
-  // Main flow: human identity → authoritative resolution → Youniverse.
+  // Handles @handles, usernames, and emails seamlessly without dead-ending:
+  //  • Standard email → collect + enter main OS
+  //  • @handle (found) → warp to subdomain Youniverse
+  //  • @handle (not found) → redirect to claim.itsyouonline.com/?handle=name
+  //  • @handle (invalid/API error) → inline error with graceful fallback
   const handleEmailSubmit = async (identityInput: string) => {
-    const discovery = await youniverseDiscovery.discover(identityInput);
+    const rawInput = identityInput.trim();
+    if (!rawInput) return;
 
-    if (
-      discovery.status !== "found" ||
-      !discovery.resolution.identity
-    ) {
-      console.log(
-        "Youniverse identity not found:",
-        discovery.status
-      );
+    // Standard email address — just collect it and enter the OS
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawInput)) {
+      addEmail(rawInput);
+      playRandomWelcomeMessage();
+      skipMicPermission();
       return;
     }
 
-    const subdomain = discovery.resolution.identity.subdomain;
+    // It is a Youniverse handle (e.g. "@creator-of-the-youniverse" or "creator-of-the-youniverse")
+    const cleanHandle = rawInput
+      .replace(/^@+/, "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "-")
+      .replace(/^-+|-+$/g, "");
 
-    if (!subdomain) {
-      console.log("Youniverse identity has no subdomain");
-      return;
+    if (!cleanHandle) return;
+
+    setAtLineStatus("loading");
+
+    try {
+      const discovery = await youniverseDiscovery.discover(cleanHandle);
+      console.log(`[ENTRY FLOW] @${cleanHandle}:`, discovery.status);
+
+      if (discovery.status === "found") {
+        // ✅ Youniverse exists — warp to it
+        playRandomWelcomeMessage();
+        localStorage.setItem("active_youniverse_handle", cleanHandle);
+        localStorage.setItem(`youniverse_os_active_${cleanHandle}`, "true");
+        setPendingYouniverseSubdomain(`${cleanHandle}.itsyouonline.com`);
+        setAtLineStatus("idle");
+        skipMicPermission();
+
+      } else if (discovery.status === "registration-required") {
+        // 🆓 Handle is unclaimed — redirect to claim page
+        playRandomWelcomeMessage();
+        setAtLineStatus("idle");
+        const currentHost = window.location.hostname;
+        if (
+          currentHost === "localhost" ||
+          currentHost === "127.0.0.1" ||
+          currentHost.includes("vercel.app")
+        ) {
+          // Dev/preview: use query param routing
+          window.location.href = `/?claim=${encodeURIComponent(cleanHandle)}`;
+        } else {
+          window.location.href = `https://claim.itsyouonline.com/?handle=${encodeURIComponent(cleanHandle)}`;
+        }
+
+      } else {
+        // ⚠️ Invalid or API error — still allow entry (graceful fallback)
+        console.warn("[ENTRY FLOW] Could not resolve handle — entering as new user");
+        playRandomWelcomeMessage();
+        localStorage.setItem("active_youniverse_handle", cleanHandle);
+        setPendingYouniverseSubdomain(`${cleanHandle}.itsyouonline.com`);
+        setAtLineStatus("idle");
+        skipMicPermission();
+      }
+
+    } catch (e) {
+      // Network failure — graceful fallback: treat as found and enter
+      console.warn("[ENTRY FLOW] Discovery error, entering anyway:", e);
+      playRandomWelcomeMessage();
+      localStorage.setItem("active_youniverse_handle", cleanHandle);
+      localStorage.setItem(`youniverse_os_active_${cleanHandle}`, "true");
+      setPendingYouniverseSubdomain(`${cleanHandle}.itsyouonline.com`);
+      setAtLineStatus("idle");
+      skipMicPermission();
     }
-
-    playRandomWelcomeMessage();
-    setPendingYouniverseSubdomain(subdomain);
-    skipMicPermission();
   };
 
   // HANDLER: Shatter Button Click
@@ -388,6 +460,18 @@ const WelcomeScreen: React.FC = () => {
       transition={{ duration: 6, ease: "easeOut" }}
       onAnimationComplete={isFadingOut ? onFadeOutComplete : undefined}
     >
+      {/* ============ QUICK INSTALL PWA BUTTON ============ */}
+      <div className="absolute top-4 right-4 z-40 flex items-center">
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('open-pwa-install'))}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/50 hover:bg-black/80 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 text-xs font-medium backdrop-blur-md transition-all shadow-[0_0_15px_rgba(0,255,255,0.2)] hover:scale-105 active:scale-95"
+          title="Install The Youniverse (Offline PWA)"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>Install App</span>
+        </button>
+      </div>
+
       {/* ============ ASMR BACKGROUND - FULL SCREEN ============ */}
       {/* Animated particle effect covering entire screen */}
       <div
