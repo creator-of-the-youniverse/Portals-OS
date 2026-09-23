@@ -13,6 +13,8 @@ import {
   Mail,
   Star,
   ExternalLink,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import PortalLayout from "./PortalLayout";
 
@@ -31,11 +33,11 @@ interface YouniverePack {
   glow: string;
   features: string[];
   badge?: string;
-  popular?: boolean;
+  isFree?: boolean;
 }
 
 // ============================================================
-// DATA
+// PACK DATA (prices are placeholders — update in Stripe + here)
 // ============================================================
 
 const PACKS: YouniverePack[] = [
@@ -48,6 +50,7 @@ const PACKS: YouniverePack[] = [
     priceNote: "forever",
     color: "from-cyan-500/20 via-cyan-900/30 to-black",
     glow: "rgba(0,255,255,0.3)",
+    isFree: true,
     features: [
       "1 Youniverse handle",
       "Full Portals OS desktop",
@@ -82,7 +85,6 @@ const PACKS: YouniverePack[] = [
     priceNote: "/mo",
     color: "from-pink-500/20 via-fuchsia-900/30 to-black",
     glow: "rgba(236,72,153,0.3)",
-    popular: true,
     badge: "Most Popular",
     features: [
       "5 Youniverse handles",
@@ -146,7 +148,7 @@ const PACKS: YouniverePack[] = [
   },
 ];
 
-// Placeholder directory (replace with real API data)
+// Placeholder directory — replace with real API query
 const DEMO_DIRECTORY = [
   { handle: "creator-of-the-youniverse", verified: true },
   { handle: "zero-to-hero", verified: false },
@@ -164,15 +166,15 @@ interface ClaimYouniverseProps {
   prefilledHandle?: string;
 }
 
-const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
-  prefilledHandle,
-}) => {
+const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) => {
   const [handle, setHandle] = useState(prefilledHandle ?? "");
   const [email, setEmail] = useState("");
   const [selectedPack, setSelectedPack] = useState<string>("free");
   const [step, setStep] = useState<"claim" | "email" | "confirm">("claim");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Read ?handle= (prod) or ?claim= (dev) from URL params if not passed as prop
+  // Read ?handle= (prod) or ?claim= (dev) from URL params
   useEffect(() => {
     if (!prefilledHandle && typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -183,16 +185,90 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
 
   const cleanHandle = handle.replace(/^@+/, "").trim().toLowerCase();
 
+  // ── Step 1: Confirm handle ──────────────────────────────────
   const handleContinue = () => {
     if (!cleanHandle) return;
+    setError(null);
     setStep("email");
   };
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  // ── Step 2: Submit claim ────────────────────────────────────
+  const handleSubmitClaim = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
-    setStep("confirm");
+    if (!email.trim() || !cleanHandle) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    const selectedPackData = PACKS.find((p) => p.id === selectedPack);
+
+    try {
+      // ── FREE TIER: hit /api/claim directly ─────────────────────
+      if (selectedPackData?.isFree || selectedPack === "free") {
+        const res = await fetch("/api/claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            handle: cleanHandle,
+            email: email.trim(),
+            displayName: cleanHandle,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.status === "created") {
+          setStep("confirm");
+          return;
+        }
+
+        if (data.status === "username-taken") {
+          setError(`@${cleanHandle} has already been claimed. Try a different handle.`);
+          return;
+        }
+
+        setError(data.message || "Something went wrong. Please try again.");
+        return;
+      }
+
+      // ── ENTERPRISE: contact redirect ───────────────────────────
+      if (selectedPack === "enterprise") {
+        window.location.href = `mailto:hello@itsyouonline.com?subject=Enterprise Pack Inquiry — @${cleanHandle}&body=Handle: @${cleanHandle}%0AEmail: ${email}`;
+        return;
+      }
+
+      // ── PAID TIERS: Stripe Checkout ────────────────────────────
+      const res = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          handle: cleanHandle,
+          email: email.trim(),
+          packId: selectedPack,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.url) {
+        // Redirect to Stripe hosted checkout
+        window.location.href = data.url;
+        return;
+      }
+
+      setError(data.message || "Could not create checkout session. Please try again.");
+
+    } catch (err) {
+      console.error("[ClaimYouniverse] Submit error:", err);
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <PortalLayout>
@@ -213,9 +289,30 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
           <span>The Youniverse</span>
         </motion.div>
 
-        {/* ── STEPS ─────────────────────────────────────────── */}
+        {/* ── Error banner ────────────────────────────── */}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="relative z-10 mb-4 flex items-center gap-3 rounded-xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm text-red-300 max-w-lg w-full backdrop-blur-sm"
+            >
+              <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-400" />
+              <span>{error}</span>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto text-red-400/60 hover:text-red-300 transition-colors text-xs"
+              >
+                ✕
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── STEPS ─────────────────────────────────── */}
         <AnimatePresence mode="wait">
-          {/* STEP 1: Choose / confirm handle */}
+          {/* STEP 1 — Handle */}
           {step === "claim" && (
             <motion.div
               key="claim"
@@ -228,9 +325,7 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
               {cleanHandle ? (
                 <div className="mb-4 flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-950/30 px-4 py-1 text-xs text-emerald-300 backdrop-blur-md">
                   <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>
-                    <strong>@{cleanHandle}</strong> is available
-                  </span>
+                  <span><strong>@{cleanHandle}</strong> is available</span>
                 </div>
               ) : (
                 <div className="mb-4 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1 text-xs text-white/50 backdrop-blur-md">
@@ -243,17 +338,13 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
                 {cleanHandle ? `@${cleanHandle}` : "Your @ Handle"}
               </h1>
               <p className="text-sm text-white/60 max-w-sm leading-relaxed mb-8">
-                Every Youniverse starts with an{" "}
-                <strong className="text-white">@handle</strong>. It is your
-                sovereign digital address — your brand, your space, your OS.
+                Every Youniverse starts with an <strong className="text-white">@handle</strong>.
+                Your sovereign digital address — your brand, your space, your OS.
               </p>
 
-              {/* Handle input */}
               <div className="w-full max-w-sm mb-6">
                 <div className="relative flex items-center">
-                  <span className="absolute left-4 text-cyan-400 font-mono text-lg font-bold">
-                    @
-                  </span>
+                  <span className="absolute left-4 text-cyan-400 font-mono text-lg font-bold">@</span>
                   <input
                     type="text"
                     value={handle}
@@ -285,7 +376,7 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
             </motion.div>
           )}
 
-          {/* STEP 2: Pick pack + email */}
+          {/* STEP 2 — Pack + email */}
           {step === "email" && (
             <motion.div
               key="email"
@@ -297,18 +388,14 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
             >
               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/20 px-4 py-1 text-xs text-emerald-300">
                 <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>@{cleanHandle} is being reserved for you</span>
+                <span>@{cleanHandle} is available</span>
               </div>
 
               <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-2 tracking-tight">
-                Choose your pack
+                Choose your plan
               </h2>
               <p className="text-sm text-white/50 mb-8">
-                All plans include{" "}
-                <strong className="text-white">
-                  ONEAI, Weaver, Nexus fleet &amp; Books OS
-                </strong>
-                . Start free, scale when ready.
+                All plans include <strong className="text-white">ONEAI, Weaver, Nexus & Books OS</strong>. Start free.
               </p>
 
               {/* Pack grid */}
@@ -339,29 +426,18 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-cyan-400">
                         {pack.icon}
                       </div>
-                      <span className="text-sm font-semibold text-white">
-                        {pack.name}
-                      </span>
+                      <span className="text-sm font-semibold text-white">{pack.name}</span>
                     </div>
                     <div className="mb-1">
-                      <span className="text-2xl font-bold text-white">
-                        {pack.price}
-                      </span>
-                      <span className="ml-1 text-xs text-white/50">
-                        {pack.priceNote}
-                      </span>
+                      <span className="text-2xl font-bold text-white">{pack.price}</span>
+                      <span className="ml-1 text-xs text-white/50">{pack.priceNote}</span>
                     </div>
                     <div className="text-[10px] text-cyan-300/80 font-mono mb-3">
-                      {pack.slots === 1
-                        ? "1 Youniverse"
-                        : `${pack.slots} Youniverses`}
+                      {pack.slots === 1 ? "1 Youniverse" : `${pack.slots} Youniverses`}
                     </div>
                     <ul className="space-y-1">
                       {pack.features.map((f) => (
-                        <li
-                          key={f}
-                          className="flex items-start gap-1.5 text-[11px] text-white/60"
-                        >
+                        <li key={f} className="flex items-start gap-1.5 text-[11px] text-white/60">
                           <Check className="h-3 w-3 text-cyan-400 mt-0.5 flex-shrink-0" />
                           {f}
                         </li>
@@ -376,11 +452,8 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
                 ))}
               </div>
 
-              {/* Email form */}
-              <form
-                onSubmit={handleEmailSubmit}
-                className="w-full max-w-sm flex flex-col gap-3"
-              >
+              {/* Email + submit */}
+              <form onSubmit={handleSubmitClaim} className="w-full max-w-sm flex flex-col gap-3">
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                   <input
@@ -389,27 +462,51 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="your@email.com"
                     required
-                    className="w-full pl-10 pr-4 py-3.5 rounded-xl bg-white/5 border border-white/10 focus:border-cyan-500/60 text-white placeholder:text-white/30 focus:outline-none text-sm backdrop-blur-sm transition-colors"
+                    disabled={isLoading}
+                    className="w-full pl-10 pr-4 py-3.5 rounded-xl bg-white/5 border border-white/10 focus:border-cyan-500/60 text-white placeholder:text-white/30 focus:outline-none text-sm backdrop-blur-sm transition-colors disabled:opacity-50"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-500 px-8 py-3.5 text-sm font-semibold text-white shadow-[0_0_30px_rgba(168,85,247,0.4)] transition-all hover:scale-105 active:scale-95"
+                  disabled={isLoading}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-500 px-8 py-3.5 text-sm font-semibold text-white shadow-[0_0_30px_rgba(168,85,247,0.4)] transition-all hover:scale-105 active:scale-95 disabled:opacity-60 disabled:pointer-events-none"
                 >
-                  <span>
-                    {selectedPack === "free"
-                      ? "Claim for Free"
-                      : `Continue with ${
-                          PACKS.find((p) => p.id === selectedPack)?.name
-                        }`}
-                  </span>
-                  <ArrowRight className="h-4 w-4" />
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        {selectedPack === "free"
+                          ? "Claim for Free"
+                          : selectedPack === "enterprise"
+                          ? "Contact for Enterprise"
+                          : `Continue to Checkout →`}
+                      </span>
+                      {selectedPack !== "free" && <ArrowRight className="h-4 w-4" />}
+                    </>
+                  )}
                 </button>
+                {selectedPack !== "free" && (
+                  <p className="text-center text-[11px] text-white/30">
+                    You'll be taken to Stripe's secure checkout. Cancel anytime.
+                  </p>
+                )}
               </form>
+
+              {/* Back link */}
+              <button
+                onClick={() => { setStep("claim"); setError(null); }}
+                className="mt-4 text-xs text-white/30 hover:text-white/60 transition-colors"
+              >
+                ← Change handle
+              </button>
             </motion.div>
           )}
 
-          {/* STEP 3: Confirmation */}
+          {/* STEP 3 — Confirmation (free tier only; paid = Stripe redirect) */}
           {step === "confirm" && (
             <motion.div
               key="confirm"
@@ -426,34 +523,36 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({
               >
                 <ShieldCheck className="h-10 w-10 text-emerald-400" />
               </motion.div>
-              <h2 className="text-3xl font-extrabold text-white mb-2">
-                Youniverse Reserved!
-              </h2>
-              <p className="text-sm text-white/60 mb-3">
-                <strong className="text-cyan-400">@{cleanHandle}</strong> is
-                being held for{" "}
-                <strong className="text-white">{email}</strong>.
+              <h2 className="text-3xl font-extrabold text-white mb-2">Youniverse Claimed!</h2>
+              <p className="text-sm text-white/60 mb-1">
+                <strong className="text-cyan-400">@{cleanHandle}</strong> is yours.
               </p>
               <p className="text-xs text-white/40 max-w-xs leading-relaxed mb-8">
-                Check your inbox for a verification link. Once confirmed, your
-                Youniverse will be live at{" "}
-                <span className="font-mono text-cyan-300">
-                  {cleanHandle}.itsyouonline.com
-                </span>
-                .
+                Check your inbox at <strong className="text-white/60">{email}</strong> to verify
+                your account and activate your Youniverse at{" "}
+                <span className="font-mono text-cyan-300">{cleanHandle}.itsyouonline.com</span>.
               </p>
-              <a
-                href={`https://${cleanHandle}.itsyouonline.com`}
-                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <span>Preview your Youniverse</span>
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
+              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
+                <a
+                  href={`https://${cleanHandle}.itsyouonline.com`}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:scale-105 transition-all"
+                >
+                  <Rocket className="h-4 w-4" />
+                  Enter Your Youniverse
+                </a>
+                <a
+                  href="https://itsyouonline.com"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Hub
+                </a>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* ── DIRECTORY ──────────────────────────────────────────── */}
+        {/* ── DIRECTORY ──────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
