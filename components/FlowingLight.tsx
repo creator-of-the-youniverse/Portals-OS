@@ -101,11 +101,28 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
                     isProcessingRef.current = true;
 
                     try {
-                        // Truncate long texts to keep bubbles clean
-                        const truncated = context.length > 150 ? context.slice(0, 150) + '…' : context;
-                        // ONE speaks the hover context directly as a chat bubble
                         const { showSpeechBubble } = await import('./speechBubbleUtils');
-                        showSpeechBubble(truncated);
+                        
+                        // Check if we've already explained this exact context
+                        if (explainedContextsRef.current.has(context)) {
+                            // Don't repeat the same hint if we've already done it, to avoid spam
+                            return; 
+                        }
+
+                        // We import the AI generator
+                        const { generateOneAiHint } = await import('../lib/oneai');
+                        
+                        // Show a thinking indicator? Not necessary if fast.
+                        const aiHint = await generateOneAiHint(context);
+                        
+                        explainedContextsRef.current.add(context);
+                        // Prevent the cache from growing infinitely
+                        if (explainedContextsRef.current.size > 50) {
+                            const firstItem = explainedContextsRef.current.values().next().value;
+                            if (firstItem) explainedContextsRef.current.delete(firstItem);
+                        }
+
+                        showSpeechBubble(aiHint);
                     } catch (error) {
                         console.error("Hover generation failed", error);
                     } finally {
@@ -170,9 +187,20 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
             let context = interactiveEl.dataset.one || interactiveEl.title || interactiveEl.getAttribute('aria-label') || interactiveEl.innerText?.trim() || "";
             if (context) {
                 try {
-                    const truncated = context.length > 150 ? context.slice(0, 150) + '…' : context;
+                    if (explainedContextsRef.current.has(context)) {
+                        return;
+                    }
+                    const { generateOneAiHint } = await import('../lib/oneai');
+                    const aiHint = await generateOneAiHint(context);
+                    
+                    explainedContextsRef.current.add(context);
+                    if (explainedContextsRef.current.size > 50) {
+                        const firstItem = explainedContextsRef.current.values().next().value;
+                        if (firstItem) explainedContextsRef.current.delete(firstItem);
+                    }
+
                     const { showSpeechBubble } = await import('./speechBubbleUtils');
-                    showSpeechBubble(truncated);
+                    showSpeechBubble(aiHint);
                 } catch (err) {
                     console.error("Mobile hint failed", err);
                 }

@@ -10,7 +10,8 @@ export type BuiltInAppId =
   | "fileViewer"
   | "settings"
   | "omniedia"
-  | "messages";
+  | "messages"
+  | "ones";
 
 // Allow dynamic folder IDs like "folder:my-project" AND agent IDs like "AC", "TOSO"
 export type AppId = BuiltInAppId | `folder:${string}` | (string & {});
