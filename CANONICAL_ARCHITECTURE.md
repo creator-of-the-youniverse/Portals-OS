@@ -91,6 +91,9 @@ The public Youniverse is the person's:
 - projects/showcase
 - publicly shared applications
 - publicly exposed information
+- interactive profile capabilities (message board, receiving interactions)
+- social media integration & links
+- Omniedia Global Score (social media analytics and gamification ranking)
 
 Public visibility does not grant operating authority.
 

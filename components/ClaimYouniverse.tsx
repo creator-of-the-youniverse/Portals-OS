@@ -148,14 +148,13 @@ const PACKS: YouniverePack[] = [
   },
 ];
 
-// Placeholder directory — replace with real API query
+// Real live Youniverses on itsyouonline.com
+// Update this list as new Youniverses are claimed and verified
 const DEMO_DIRECTORY = [
-  { handle: "creator-of-the-youniverse", verified: true },
-  { handle: "zero-to-hero", verified: false },
-  { handle: "sovereign-builder", verified: true },
-  { handle: "the-oracle-method", verified: false },
-  { handle: "sleep-money-machine", verified: false },
-  { handle: "nexus-commander", verified: true },
+  { handle: "creator-of-the-youniverse", label: "Creator HQ", desc: "The Network hub", verified: true },
+  { handle: "oracle", label: "The Oracle", desc: "Business diagnostics", verified: true },
+  { handle: "books", label: "Books OS", desc: "Knowledge vault", verified: true },
+  { handle: "ones", label: "ONEAI", desc: "Sovereign AI", verified: true },
 ];
 
 // ============================================================
