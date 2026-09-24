@@ -8,6 +8,7 @@ import {
   Building2,
   Check,
   ArrowRight,
+  Rocket,
   Mail,
   Star,
   Loader2,
