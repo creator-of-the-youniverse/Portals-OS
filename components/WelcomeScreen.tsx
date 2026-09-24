@@ -517,7 +517,7 @@ const WelcomeScreen: React.FC = () => {
               onClick={handleShatterClick}
               shatterColor="#00ffff"
               shardCount={30}
-              className="!p-0 !w-24 !h-24 !rounded-full !border-none"
+              className="!p-0 !w-12 !h-12 !rounded-full !border-none"
             >
               <LiquidMetalButton
                 className="w-full h-full"

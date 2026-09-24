@@ -23,14 +23,14 @@ export function LiquidMetalButton({
   const rippleId = useRef(0);
 
   const dimensions = useMemo(() => {
-    // Sized to 96x96 to match the w-24 h-24 tailwind classes from the shatter button
+    // Sized to 48x48 to match the w-12 h-12 tailwind classes from the shatter button
     return {
-      width: 96,
-      height: 96,
-      innerWidth: 92,
-      innerHeight: 92,
-      shaderWidth: 96,
-      shaderHeight: 96,
+      width: 48,
+      height: 48,
+      innerWidth: 44,
+      innerHeight: 44,
+      shaderWidth: 48,
+      shaderHeight: 48,
     };
   }, []);
 
