@@ -15,7 +15,9 @@ import { MinimalistTextEffect } from "./MinimalistTextEffect";
 import "../components/WelcomeScreen.css";
 // ASMR animated background for inside the circle
 import { AsmrBackground } from "../components/AsmrBackground";
-// Shatter button component (replaced by shimmer button)
+// Shatter button component
+import { Component as ShatterButton } from "../@/components/ui/shatter-button";
+// Shimmer button component
 import AnimatedGenerateButton from "./animated-generate-button-shadcn-tailwind";
 import { createYouniverseDiscovery } from "../lib/youniverseDiscovery";
 import { createYouniverseIdentityApiResolver } from "../services/youniverseIdentityService";
@@ -511,13 +513,19 @@ const WelcomeScreen: React.FC = () => {
             transition={{ duration: 1, delay: 0.5 }}
             className="flex items-center justify-center"
           >
-            <AnimatedGenerateButton
+            <ShatterButton
               onClick={handleShatterClick}
-              highlightHueDeg={180} // cyan-ish
-              labelIdle="CLAIM"
-              labelActive="INITIATING"
-              className="w-24 h-24 [&>button]:!px-0 [&>button]:!py-0 [&>button]:!rounded-full [&>button]:w-full [&>button]:h-full [&_.ui-anim-btn-svg]:hidden"
-            />
+              shatterColor="#00ffff"
+              shardCount={30}
+              className="!p-0 !w-24 !h-24 !rounded-full !border-none"
+            >
+              <AnimatedGenerateButton
+                highlightHueDeg={180}
+                labelIdle=""
+                labelActive=""
+                className="w-full h-full [&>button]:!px-0 [&>button]:!py-0 [&>button]:!rounded-full [&>button]:w-full [&>button]:h-full [&_.ui-anim-btn-svg]:hidden"
+              />
+            </ShatterButton>
           </motion.div>
         )}
 
