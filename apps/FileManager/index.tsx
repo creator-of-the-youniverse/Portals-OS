@@ -146,26 +146,31 @@ const FileManager: React.FC = () => {
                 </div>
 
                 {/* Main Content */}
-                <div className="flex-1 overflow-auto p-4">
+                <div className="flex-1 overflow-auto p-6 bg-black/40">
                     {files.length === 0 ? (
-                        <div className="text-center py-12 text-[hsl(var(--muted-foreground-hsl))]">
-                            <Folder className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                            <p>This folder is empty</p>
+                        <div className="flex flex-col items-center justify-center h-full text-white/30">
+                            <Folder className="w-16 h-16 mb-4 opacity-50" />
+                            <p className="font-mono uppercase tracking-widest text-xs">Directory is empty</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                             {files.map(file => (
                                 <div
                                     key={file.id}
                                     onDoubleClick={() => handleItemClick(file)}
-                                    className="group flex flex-col items-center p-3 rounded-lg hover:bg-[hsl(var(--accent-strong-hsl))/0.1] cursor-pointer transition-colors border border-transparent hover:border-[hsl(var(--accent-strong-hsl))/0.2]"
+                                    className="group relative flex flex-col items-center p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-cyan-500/30 cursor-pointer transition-all duration-200"
                                 >
-                                    <div className={`w-12 h-12 mb-2 flex items-center justify-center text-[hsl(var(--accent-strong-hsl))] transition-transform group-hover:scale-110`}>
-                                        <FileIcon type={file.type} className="w-full h-full" />
+                                    {/* Hover glow effect */}
+                                    <div className="absolute inset-0 bg-cyan-500/0 group-hover:bg-cyan-500/5 rounded-xl transition-colors pointer-events-none" />
+                                    
+                                    <div className="w-16 h-16 mb-3 flex items-center justify-center text-cyan-400/80 group-hover:text-cyan-400 group-hover:scale-110 transition-transform duration-300 drop-shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                                        <FileIcon type={file.type} className="w-12 h-12" />
                                     </div>
-                                    <span className="text-sm text-center truncate w-full px-1 select-none group-hover:text-[hsl(var(--accent-strong-hsl))]">
-                                        {file.name}
-                                    </span>
+                                    <div className="w-full text-center">
+                                        <span className="text-xs text-white/80 font-medium group-hover:text-white break-words line-clamp-3 leading-snug">
+                                            {file.name}
+                                        </span>
+                                    </div>
                                 </div>
                             ))}
                         </div>
