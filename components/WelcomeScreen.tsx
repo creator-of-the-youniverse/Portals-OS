@@ -397,7 +397,6 @@ const WelcomeScreen: React.FC = () => {
         // ✅ Youniverse exists — warp to it
         playRandomWelcomeMessage();
         localStorage.setItem("active_youniverse_handle", cleanHandle);
-        localStorage.setItem(`youniverse_os_active_${cleanHandle}`, "true");
         setPendingYouniverseSubdomain(`${cleanHandle}.itsyouonline.com`);
         setAtLineStatus("idle");
         skipMicPermission();
@@ -433,7 +432,6 @@ const WelcomeScreen: React.FC = () => {
       console.warn("[ENTRY FLOW] Discovery error, entering anyway:", e);
       playRandomWelcomeMessage();
       localStorage.setItem("active_youniverse_handle", cleanHandle);
-      localStorage.setItem(`youniverse_os_active_${cleanHandle}`, "true");
       setPendingYouniverseSubdomain(`${cleanHandle}.itsyouonline.com`);
       setAtLineStatus("idle");
       skipMicPermission();
