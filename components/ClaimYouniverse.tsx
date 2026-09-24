@@ -2,8 +2,6 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles,
-  ShieldCheck,
-  Rocket,
   Globe,
   Zap,
   Users,
@@ -12,11 +10,12 @@ import {
   ArrowRight,
   Mail,
   Star,
-  ExternalLink,
   Loader2,
   AlertCircle,
+  Atom,
 } from "lucide-react";
 import PortalLayout from "./PortalLayout";
+import AtomWelcome from "./AtomWelcome";
 
 // ============================================================
 // TYPES
@@ -151,10 +150,11 @@ const PACKS: YouniverePack[] = [
 // Real live Youniverses on itsyouonline.com
 // Update this list as new Youniverses are claimed and verified
 const DEMO_DIRECTORY = [
-  { handle: "creator-of-the-youniverse", label: "Creator HQ", desc: "The Network hub", verified: true },
-  { handle: "oracle", label: "The Oracle", desc: "Business diagnostics", verified: true },
-  { handle: "books", label: "Books OS", desc: "Knowledge vault", verified: true },
-  { handle: "ones", label: "ONEAI", desc: "Sovereign AI", verified: true },
+  { handle: "atom", label: "Atom", desc: "The first ONE AI", verified: true, isAtom: true },
+  { handle: "creator-of-the-youniverse", label: "Creator HQ", desc: "The Network hub", verified: true, isAtom: false },
+  { handle: "oracle", label: "The Oracle", desc: "Business diagnostics", verified: true, isAtom: false },
+  { handle: "books", label: "Books OS", desc: "Knowledge vault", verified: true, isAtom: false },
+  { handle: "ones", label: "ONE AI", desc: "Sovereign AI interface", verified: true, isAtom: false },
 ];
 
 // ============================================================
@@ -169,7 +169,7 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
   const [handle, setHandle] = useState(prefilledHandle ?? "");
   const [email, setEmail] = useState("");
   const [selectedPack, setSelectedPack] = useState<string>("free");
-  const [step, setStep] = useState<"claim" | "email" | "confirm">("claim");
+  const [step, setStep] = useState<"claim" | "email" | "atom" | "confirm">("claim");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -217,7 +217,7 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
         const data = await res.json();
 
         if (res.ok && data.status === "created") {
-          setStep("confirm");
+          setStep("atom");
           return;
         }
 
@@ -269,9 +269,33 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
   // RENDER
   // ============================================================
 
+  // ── Atom welcome step (full-screen, no PortalLayout chrome) ──
+  if (step === "atom") {
+    return (
+      <AtomWelcome
+        handle={cleanHandle}
+        email={email}
+        onEnterYouniverse={() => {
+          const currentHost = window.location.hostname;
+          if (
+            currentHost === "localhost" ||
+            currentHost === "127.0.0.1" ||
+            currentHost.includes("vercel.app")
+          ) {
+            window.location.href = `/?@=${cleanHandle}`;
+          } else {
+            window.location.href = `https://${cleanHandle}.itsyouonline.com`;
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <PortalLayout>
-      <div className="relative min-h-screen w-full flex flex-col items-center justify-start px-4 py-10 overflow-x-hidden">
+      {/* Scroll wrapper — PortalLayout is fixed/inset-0 so we need overflow-y-auto here */}
+      <div className="absolute inset-0 overflow-y-auto">
+      <div className="relative min-w-0 w-full flex flex-col items-center justify-start px-4 py-10">
         {/* Cosmic background glow */}
         <div className="pointer-events-none fixed inset-0 flex items-center justify-center overflow-hidden">
           <div className="h-[700px] w-[700px] rounded-full bg-gradient-to-tr from-cyan-500/10 via-purple-600/15 to-pink-500/5 blur-[140px]" />
@@ -505,50 +529,7 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
             </motion.div>
           )}
 
-          {/* STEP 3 — Confirmation (free tier only; paid = Stripe redirect) */}
-          {step === "confirm" && (
-            <motion.div
-              key="confirm"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5 }}
-              className="relative z-10 flex w-full max-w-md flex-col items-center text-center"
-            >
-              <motion.div
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-                className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-emerald-500/40 bg-gradient-to-br from-emerald-500/20 to-cyan-900/40 shadow-[0_0_40px_rgba(16,185,129,0.4)]"
-              >
-                <ShieldCheck className="h-10 w-10 text-emerald-400" />
-              </motion.div>
-              <h2 className="text-3xl font-extrabold text-white mb-2">Youniverse Claimed!</h2>
-              <p className="text-sm text-white/60 mb-1">
-                <strong className="text-cyan-400">@{cleanHandle}</strong> is yours.
-              </p>
-              <p className="text-xs text-white/40 max-w-xs leading-relaxed mb-8">
-                Check your inbox at <strong className="text-white/60">{email}</strong> to verify
-                your account and activate your Youniverse at{" "}
-                <span className="font-mono text-cyan-300">{cleanHandle}.itsyouonline.com</span>.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
-                <a
-                  href={`https://${cleanHandle}.itsyouonline.com`}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:scale-105 transition-all"
-                >
-                  <Rocket className="h-4 w-4" />
-                  Enter Your Youniverse
-                </a>
-                <a
-                  href="https://itsyouonline.com"
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Hub
-                </a>
-              </div>
-            </motion.div>
-          )}
+          {/* STEP 3 — Atom (handled above as full-screen; this branch never renders) */}
         </AnimatePresence>
 
         {/* ── DIRECTORY ──────────────────────────────────────── */}
@@ -570,21 +551,40 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
               <a
                 key={entry.handle}
                 href={`https://${entry.handle}.itsyouonline.com`}
-                className="group flex items-center gap-2 rounded-xl border border-white/5 bg-white/5 px-3 py-2.5 hover:border-cyan-500/30 hover:bg-white/10 transition-all"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`group flex items-center gap-2 rounded-xl border px-3 py-2.5 hover:bg-white/10 transition-all ${
+                  entry.isAtom
+                    ? "border-cyan-500/30 bg-cyan-950/20 hover:border-cyan-400/50"
+                    : "border-white/5 bg-white/5 hover:border-cyan-500/30"
+                }`}
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-cyan-400 font-mono font-bold text-xs flex-shrink-0">
-                  @
+                <div className={`flex h-7 w-7 items-center justify-center rounded-lg font-mono font-bold text-xs flex-shrink-0 ${
+                  entry.isAtom ? "bg-cyan-500/20 text-cyan-300 shadow-[0_0_10px_rgba(0,255,255,0.2)]" : "bg-white/10 text-cyan-400"
+                }`}>
+                  {entry.isAtom ? <Atom className="h-3.5 w-3.5" /> : <span>@</span>}
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-xs font-medium text-white group-hover:text-cyan-300 transition-colors">
-                    @{entry.handle}
+                  <div className={`truncate text-xs font-medium transition-colors ${
+                    entry.isAtom ? "text-cyan-300 group-hover:text-cyan-200" : "text-white group-hover:text-cyan-300"
+                  }`}>
+                    {entry.isAtom ? (
+                      <>
+                        <span className="font-semibold">{entry.label}</span>
+                        <span className="ml-1.5 text-[9px] uppercase tracking-widest text-cyan-500/70 font-mono">First ONE AI</span>
+                      </>
+                    ) : entry.label}
                   </div>
                   <div className="text-[10px] text-white/30 font-mono truncate">
                     {entry.handle}.itsyouonline.com
                   </div>
                 </div>
                 {entry.verified && (
-                  <ShieldCheck className="ml-auto h-3 w-3 text-cyan-500 flex-shrink-0" />
+                  <div className={`ml-auto h-3 w-3 rounded-full flex-shrink-0 ${
+                    entry.isAtom
+                      ? "bg-cyan-400/60 border border-cyan-400 shadow-[0_0_6px_rgba(0,255,255,0.4)]"
+                      : "bg-cyan-500/40 border border-cyan-500/60"
+                  }`} />
                 )}
               </a>
             ))}
@@ -593,6 +593,7 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
             Every @ is a sovereign space. Yours is waiting.
           </p>
         </motion.div>
+      </div>
       </div>
     </PortalLayout>
   );

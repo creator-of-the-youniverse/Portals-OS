@@ -7,7 +7,7 @@ const OneAIApp: React.FC<AppProps> = () => {
       <iframe 
         src="https://ones.itsyouonline.com"
         className="w-full h-full border-none"
-        title="ONEAI Interface"
+        title="Atom — ONE AI"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; microphone; camera"
         allowFullScreen
       />

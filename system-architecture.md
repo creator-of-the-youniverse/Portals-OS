@@ -63,11 +63,12 @@ The intelligence layer is strictly demarcated into distinct responsibilities to 
                                        │
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                               ONEAI                                         │
+│                        ONEAI  ·  (first instance: Atom)                     │
 │                (The Sovereign Personal Companion & Brain)                   │
 │                                                                             │
 │   • "ONEAI is who travels with you"                                         │
-│   • First touchpoint: User steps into their Youniverse and speaks to ONEAI  │
+│   • Atom is pre-pinned to every Youniverse — the first friend, always there │
+│   • First touchpoint: User steps into their Youniverse and speaks to Atom   │
 │   • Holds context, aspirations, voice, strengths, and business roadmap      │
 │   • Coordinates with Weaver to shape space & with Oracle to solve problems  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -114,7 +115,7 @@ The intelligence layer is strictly demarcated into distinct responsibilities to 
 
 | Entity | Role | Nature | Sovereign Location |
 |---|---|---|---|
-| **ONEAI** | Personal Companion & Identity Anchor | Sovereign continuous intelligence; knows the user's history, tone, and goals. | Client-side / edge on user's device |
+| **ONEAI** (first instance: **Atom**) | Personal Companion & Identity Anchor | Sovereign continuous intelligence; knows the user's history, tone, and goals. Atom is pre-pinned to every Youniverse — the "Tom from MySpace" of the system — first friend, till the end. | Client-side / edge on user's device |
 | **Weaver** | Spatial Architect & In-System Builder | Generative UI/Space agent (Agent Zero model); constructs widgets, themes, and environments. | Portals OS spatial runtime |
 | **The Oracle** | Tactical Diagnostic Commander | Diagnostic tool; analyzes bottlenecks, designs game plans, and orchestrates agents. | Portals OS command interface |
 | **Nexus PPSA** | Operational Workforce (167+ Agents) | Domain specialists executing targeted jobs (content, validation, cash flow, dev). | Embedded modular PWAs |
