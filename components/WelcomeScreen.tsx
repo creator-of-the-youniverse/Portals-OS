@@ -372,7 +372,6 @@ const WelcomeScreen: React.FC = () => {
     // Standard email address fallback — just collect it and enter the OS
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawInput)) {
       addEmail(rawInput);
-      playRandomWelcomeMessage();
       skipMicPermission();
       return;
     }
@@ -395,7 +394,6 @@ const WelcomeScreen: React.FC = () => {
 
       if (discovery.status === "found") {
         // ✅ Youniverse exists — warp to it
-        playRandomWelcomeMessage();
         localStorage.setItem("active_youniverse_handle", cleanHandle);
         setPendingYouniverseSubdomain(`${cleanHandle}.itsyouonline.com`);
         setAtLineStatus("idle");
@@ -403,7 +401,6 @@ const WelcomeScreen: React.FC = () => {
 
       } else if (discovery.status === "registration-required") {
         // 🆓 Handle is unclaimed — redirect to claim page
-        playRandomWelcomeMessage();
         setAtLineStatus("idle");
         const currentHost = window.location.hostname;
         if (
@@ -420,7 +417,6 @@ const WelcomeScreen: React.FC = () => {
       } else {
         // ⚠️ Invalid or API error — still allow entry (graceful fallback)
         console.warn("[ENTRY FLOW] Could not resolve handle — entering as new user");
-        playRandomWelcomeMessage();
         localStorage.setItem("active_youniverse_handle", cleanHandle);
         setPendingYouniverseSubdomain(`${cleanHandle}.itsyouonline.com`);
         setAtLineStatus("idle");
@@ -430,7 +426,6 @@ const WelcomeScreen: React.FC = () => {
     } catch (e) {
       // Network failure — graceful fallback: treat as found and enter
       console.warn("[ENTRY FLOW] Discovery error, entering anyway:", e);
-      playRandomWelcomeMessage();
       localStorage.setItem("active_youniverse_handle", cleanHandle);
       setPendingYouniverseSubdomain(`${cleanHandle}.itsyouonline.com`);
       setAtLineStatus("idle");

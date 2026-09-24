@@ -114,7 +114,16 @@ const App: React.FC = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, [setIsMobile]);
 
-  // Auto-open logic removed per user request
+  useEffect(() => {
+    if (subdomainOsActive && !initialGreetingSpoken) {
+      const welcomeAudios = Array.from({ length: 25 }, (_, i) => `/assets/audio/welcome_${i + 1}.mp3`);
+      const randomAudio = welcomeAudios[Math.floor(Math.random() * welcomeAudios.length)];
+      import('./lib/audioUtils').then(({ playAudio }) => {
+        playAudio(randomAudio, undefined, 0.3);
+      });
+      setInitialGreetingSpoken(true);
+    }
+  }, [subdomainOsActive, initialGreetingSpoken, setInitialGreetingSpoken]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
