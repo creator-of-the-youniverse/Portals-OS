@@ -18,7 +18,7 @@ import { AsmrBackground } from "../components/AsmrBackground";
 // Shatter button component
 import { Component as ShatterButton } from "../@/components/ui/shatter-button";
 // Shimmer button component
-import AnimatedGenerateButton from "./animated-generate-button-shadcn-tailwind";
+import { LiquidMetalButton } from "./LiquidMetalButton";
 import { createYouniverseDiscovery } from "../lib/youniverseDiscovery";
 import { createYouniverseIdentityApiResolver } from "../services/youniverseIdentityService";
 import { Download } from "lucide-react";
@@ -519,11 +519,9 @@ const WelcomeScreen: React.FC = () => {
               shardCount={30}
               className="!p-0 !w-24 !h-24 !rounded-full !border-none"
             >
-              <AnimatedGenerateButton
-                highlightHueDeg={180}
-                labelIdle=""
-                labelActive=""
-                className="w-full h-full [&>button]:!px-0 [&>button]:!py-0 [&>button]:!rounded-full [&>button]:w-full [&>button]:h-full [&_.ui-anim-btn-svg]:hidden"
+              <LiquidMetalButton
+                onClick={handleShatterClick}
+                className="w-full h-full"
               />
             </ShatterButton>
           </motion.div>
