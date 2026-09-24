@@ -13,7 +13,7 @@ Authority: Current Product Vision
 
 This document defines the current canonical architecture of ItsYouOnline / THE YOUNIVERSE.
 
-Where the existing Portals-OS repository, README files, comments, prompts, components, services, or architectural dochhhhhhhhhhhhhhhhhhhhhuments contradict this document, this document takes precedence.
+Where the existing Portals-OS repository, README files, comments, prompts, components, services, or architectural documents contradict this document, this document takes precedence.
 
 The existing Portals-OS repository is an archaeological artifact and implementation resource. It contains valuable working concepts, UI, services, schemas, and experiments, but it is not automatically the current architecture.
 
