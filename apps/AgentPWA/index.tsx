@@ -30,8 +30,8 @@ const generateSparkline = (seed: number, points: number, width: number, height: 
 };
 
 const AgentPWA: React.FC<AgentPWAProps> = ({ metadata }) => {
-  const agentId = metadata?.id || 'AC';
-  const agent = NEXUS_AGENTS.find(a => a.id === agentId) || NEXUS_AGENTS[0];
+  const [currentAgentId, setCurrentAgentId] = useState(metadata?.id || 'AC');
+  const agent = NEXUS_AGENTS.find(a => a.id === currentAgentId) || NEXUS_AGENTS[0];
   const squad = NEXUS_SQUADS.find(s => s.id === agent.squadId);
   const squadOperatives = squad ? NEXUS_AGENTS.filter(a => squad.agentIds.includes(a.id)) : [agent];
   
@@ -90,6 +90,7 @@ const AgentPWA: React.FC<AgentPWAProps> = ({ metadata }) => {
               return (
                 <div 
                   key={op.id}
+                  onClick={() => setCurrentAgentId(op.id)}
                   className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
                     isActive 
                       ? 'bg-white/10 border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.05)]' 
@@ -259,9 +260,9 @@ const AgentPWA: React.FC<AgentPWAProps> = ({ metadata }) => {
 
         {/* TAB CONTENT: ACTIVE TERMINAL (The original iframe) */}
         {activeTab === 'ACTIVE TERMINAL' && (
-          <div className="flex-1 relative bg-black">
-            {!metadata?.url ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center p-8 gap-4">
+          <div className="flex-1 relative bg-black overflow-hidden">
+            {!(agent.url || metadata?.url) ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-8 gap-4 overflow-y-auto">
                 <AlertTriangle className="w-10 h-10 text-yellow-500/60" />
                 <p className="text-sm font-mono tracking-widest uppercase">No Terminal URL Configured</p>
                 <p className="text-xs text-white/40 text-center">This agent does not have an active deployment URL.</p>
@@ -273,15 +274,15 @@ const AgentPWA: React.FC<AgentPWAProps> = ({ metadata }) => {
                     <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
                     <div className="text-center">
                       <p className="text-white/80 text-[10px] font-black tracking-[0.2em] uppercase mb-2">ESTABLISHING SECURE UPLINK</p>
-                      <p className="text-cyan-400/50 text-[10px] font-mono">{metadata.url.replace('https://', '')}</p>
+                      <p className="text-cyan-400/50 text-[10px] font-mono">{(agent.url || metadata!.url).replace('https://', '')}</p>
                     </div>
                   </div>
                 )}
                 <iframe
-                  src={metadata.url}
-                  className="w-full h-full border-0"
+                  src={agent.url || metadata?.url}
+                  className="w-full h-full border-0 bg-transparent"
                   onLoad={() => setIframeLoaded(true)}
-                  allow="clipboard-write; microphone; camera"
+                  allow="clipboard-write; microphone; camera; display-capture"
                   title="Agent Terminal"
                 />
               </>
