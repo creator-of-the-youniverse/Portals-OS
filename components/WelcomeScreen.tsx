@@ -520,7 +520,6 @@ const WelcomeScreen: React.FC = () => {
               className="!p-0 !w-24 !h-24 !rounded-full !border-none"
             >
               <LiquidMetalButton
-                onClick={handleShatterClick}
                 className="w-full h-full"
               />
             </ShatterButton>
