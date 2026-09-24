@@ -506,7 +506,7 @@ const WelcomeScreen: React.FC = () => {
       <div className="relative w-full max-w-md flex items-center justify-center" style={{ zIndex: 20 }}>
         {/* ============ SHATTER BUTTON ============ */}
         {/* Explodes to reveal email field */}
-        {(!showEmailEntry || isShatterAnimating) && (
+        {(!showIdentityEntry || isShatterAnimating) && (
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
