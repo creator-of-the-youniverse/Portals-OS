@@ -66,9 +66,9 @@ interface EmailFieldProps {
 // EXPORTED COMPONENT
 // ============================================================================
 const WelcomeScreen: React.FC = () => {
-  // EMAIL FIELD COMPONENT
-  const EmailFieldComponent = ({
-    placeholder = "Enter Email",
+  // @ LINE COMPONENT
+  const AtLineComponent = ({
+    placeholder = "Enter @Handle",
     onSubmit = (value: string) => console.log("Submitted:", value),
     disabled = false,
   }: EmailFieldProps) => {
@@ -85,7 +85,7 @@ const WelcomeScreen: React.FC = () => {
     const [isFocused, setIsFocused] = useState(false);                      // Whether input is focused
     const [ripplePosition, setRipplePosition] = useState({ cx: "50%", cy: "50%" }); // Gradient center position
     const [isDark, setIsDark] = useState(false);                            // Dark mode detection
-    const [value, setValue] = useState("");                                 // Current email input value
+    const [value, setValue] = useState("");                                 // Current identity input value
 
     // ------------------------------------------------------------------------
     // EFFECT: Dark Mode Detection
@@ -123,7 +123,7 @@ const WelcomeScreen: React.FC = () => {
     // ------------------------------------------------------------------------
     // HANDLER: Form Submission
     // ------------------------------------------------------------------------
-    // Processes email submission and clears the field
+    // Processes identity submission and clears the field
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (value.trim() && onSubmit && !disabled) {
@@ -220,7 +220,7 @@ const WelcomeScreen: React.FC = () => {
             />
 
             {/* ============ WHITE LINE - ALWAYS VISIBLE ============ */}
-            {/* Static white underline that's always shown for email entry */}
+            {/* Static white underline that's always shown for identity entry */}
             <div
               className="absolute bottom-2 left-1/2 transform -translate-x-1/2"
               style={{
@@ -239,7 +239,7 @@ const WelcomeScreen: React.FC = () => {
   // ============================================================================
   // WELCOME SCREEN COMPONENT
   // ============================================================================
-  // Main landing page with background image, title, and email collection
+  // Main landing page with background image, title, and identity collection
   // ------------------------------------------------------------------------
   // GLOBAL STATE - Kernel store actions
   // ------------------------------------------------------------------------
@@ -258,7 +258,7 @@ const WelcomeScreen: React.FC = () => {
   // ------------------------------------------------------------------------
   const [isFadingOut, setIsFadingOut] = useState(false);  // Controls exit animation
   const [isShatterAnimating, setIsShatterAnimating] = useState(false); // Controls shatter animation delay
-  const [showEmailEntry, setShowEmailEntry] = useState(false); // ALWAYS require the user to press the button to reveal email entry
+  const [showIdentityEntry, setShowIdentityEntry] = useState(false); // ALWAYS require the user to press the button to reveal identity entry
   const [pendingYouniverseSubdomain, setPendingYouniverseSubdomain] = useState<string | null>(null);
 
   // ------------------------------------------------------------------------
@@ -369,7 +369,7 @@ const WelcomeScreen: React.FC = () => {
     const rawInput = identityInput.trim();
     if (!rawInput) return;
 
-    // Standard email address — just collect it and enter the OS
+    // Standard email address fallback — just collect it and enter the OS
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawInput)) {
       addEmail(rawInput);
       playRandomWelcomeMessage();
@@ -445,9 +445,9 @@ const WelcomeScreen: React.FC = () => {
   // Explodes the button and shows the email field after animation completes
   const handleShatterClick = () => {
     setIsShatterAnimating(true);
-    // Wait for shatter animation to complete before showing email field
+    // Wait for shatter animation to complete before showing identity field
     setTimeout(() => {
-      setShowEmailEntry(true);
+      setShowIdentityEntry(true);
       setIsShatterAnimating(false);
     }, 1000); // 1 second delay matches shatter animation duration
   };
@@ -529,16 +529,16 @@ const WelcomeScreen: React.FC = () => {
           </motion.div>
         )}
 
-        {/* ============ EMAIL COLLECTION SECTION & TITLE ============ */}
-        {/* Interactive email field and title - shows after button click */}
-        {showEmailEntry && (
+        {/* ============ @ LINE COLLECTION SECTION & TITLE ============ */}
+        {/* Interactive identity field and title - shows after button click */}
+        {showIdentityEntry && (
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5 }}
             className="flex flex-col items-center w-full"
           >
-            <EmailFieldComponent
+            <AtLineComponent
               placeholder="Creator Of The Youniverse"
               onSubmit={handleEmailSubmit}
               disabled={false}
