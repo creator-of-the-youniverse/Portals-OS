@@ -1,13 +1,22 @@
-import { VirtualFile } from '../types';
+﻿import { VirtualFile } from '../types';
 
 /**
- * Virtual Portfolio Filesystem
- * 
- * This mock filesystem contains portfolio content organized as files and folders.
- * Navigate via File Manager GUI or Terminal commands.
+ * Virtual Youniverse Filesystem
+ *
+ * This is the sovereign file layer for a Portals OS Youniverse.
+ * Navigate via File Manager GUI or Terminal commands (ls, cd, cat, tree, open, find).
+ *
+ * Tree:
+ *   /                       Root
+ *   ├── youniverse/         Your sovereign profile space
+ *   ├── projects/           Your work
+ *   ├── network/            Your connections (Atom is always first)
+ *   ├── notnotes/           Working memory / artifact layer
+ *   └── contact/            How to reach you
  */
 export const VIRTUAL_FILESYSTEM: VirtualFile[] = [
-    // === ROOT ===
+
+    // ── ROOT ─────────────────────────────────────────────────────
     {
         id: 'root',
         name: '/',
@@ -18,264 +27,189 @@ export const VIRTUAL_FILESYSTEM: VirtualFile[] = [
         modifiedAt: '2025-01-01T00:00:00.000Z',
     },
 
-    // === PROJECTS FOLDER ===
+    // ── YOUNIVERSE ───────────────────────────────────────────────
+    {
+        id: 'youniverse',
+        name: 'Youniverse',
+        type: 'folder',
+        path: '/youniverse',
+        parentPath: '/',
+        color: '#06b6d4',
+        createdAt: '2025-01-01T00:00:00.000Z',
+        modifiedAt: '2025-01-01T00:00:00.000Z',
+    },
+    {
+        id: 'youniverse-about',
+        name: 'About.md',
+        type: 'markdown',
+        path: '/youniverse/About.md',
+        parentPath: '/youniverse',
+        size: '1.0 KB',
+        createdAt: '2025-01-01T00:00:00.000Z',
+        modifiedAt: '2025-01-01T00:00:00.000Z',
+        content: {
+            markdown: `# Welcome to My Youniverse
+
+This is my sovereign space on ItsYouOnline.
+
+Every person may have a Youniverse.
+Public visibility does not grant operating authority.
+The architecture is centered on the person.
+
+---
+
+*This file is yours to edit.*
+`,
+        },
+    },
+    {
+        id: 'youniverse-atom-link',
+        name: 'Atom.link',
+        type: 'link',
+        path: '/youniverse/Atom.link',
+        parentPath: '/youniverse',
+        createdAt: '2025-01-01T00:00:00.000Z',
+        modifiedAt: '2025-01-01T00:00:00.000Z',
+        content: { url: 'https://atom.itsyouonline.com' },
+    },
+    {
+        id: 'youniverse-ones-link',
+        name: 'ONE-AI.link',
+        type: 'link',
+        path: '/youniverse/ONE-AI.link',
+        parentPath: '/youniverse',
+        createdAt: '2025-01-01T00:00:00.000Z',
+        modifiedAt: '2025-01-01T00:00:00.000Z',
+        content: { url: 'https://ones.itsyouonline.com' },
+    },
+
+    // ── PROJECTS ─────────────────────────────────────────────────
     {
         id: 'projects',
         name: 'Projects',
         type: 'folder',
         path: '/projects',
         parentPath: '/',
-        color: '#3b82f6',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        modifiedAt: '2025-01-01T00:00:00.000Z',
-    },
-
-    // Web Apps subfolder
-    {
-        id: 'web-apps',
-        name: 'Web-Apps',
-        type: 'folder',
-        path: '/projects/web-apps',
-        parentPath: '/projects',
         color: '#8b5cf6',
         createdAt: '2025-01-01T00:00:00.000Z',
         modifiedAt: '2025-01-01T00:00:00.000Z',
     },
-
-    // Portfolio OS Project
     {
-        id: 'portfolio-os',
-        name: 'Portfolio-OS',
-        type: 'folder',
-        path: '/projects/web-apps/portfolio-os',
-        parentPath: '/projects/web-apps',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        modifiedAt: '2025-01-01T00:00:00.000Z',
-    },
-    {
-        id: 'portfolio-os-readme',
+        id: 'projects-readme',
         name: 'README.md',
         type: 'markdown',
-        path: '/projects/web-apps/portfolio-os/README.md',
-        parentPath: '/projects/web-apps/portfolio-os',
-        size: '2.4 KB',
+        path: '/projects/README.md',
+        parentPath: '/projects',
+        size: '300 B',
         createdAt: '2025-01-01T00:00:00.000Z',
         modifiedAt: '2025-01-01T00:00:00.000Z',
         content: {
-            markdown: `# Portfolio OS
+            markdown: `# Projects
 
-An interactive portfolio website disguised as a Windows-like operating system.
+Your work lives here.
 
-## 🌟 Features
-
-- **3D App Sphere**: Navigate applications in an immersive 3D environment
-- **Virtual Filesystem**: Browse projects like exploring a real file system
-- **Integrated Terminal**: Full command-line access with Unix-like commands
-- **Window Management**: Drag, resize, snap windows with smooth animations
-- **AI Assistant**: Coming soon - interactive guide to showcase work
-
-## 🛠️ Tech Stack
-
-- **Frontend**: React 18 + TypeScript
-- **Animations**: Framer Motion
-- **3D Graphics**: Three.js / React Three Fiber
-- **State Management**: Zustand
-- **Styling**: Tailwind CSS
-- **AI**: Google Gemini API
-
-## 🚀 Performance Optimizations
-
-- Optimized window rendering with \`useMotionValue\`
-- Memoized heavy 3D components
-- Lazy-loaded applications
-- Split code by route
-
-## 📦 Project Structure
-
-\`\`\`
-portfolio-os/
-├── apps/          # Individual applications
-├── components/    # Reusable UI components
-├── store/         # Zustand state management
-├── constants/     # Configuration and data
-└── lib/           # Utility functions
-\`\`\`
-
-## 🎨 Design Philosophy
-
-Portfolio OS reimagines the traditional portfolio website as an interactive operating system, making the browsing experience memorable and engaging.
-
-## 🔗 Links
-
-- [Live Demo](https://Itsyouonline.com)
-- [GitHub Repository](https://github.com/toidiputs/portfolio-os)
+Add a folder for each project with a README, live demo link, and repo link.
+Use the Terminal: \`cd /projects && ls\`
 
 ---
 
-**Status**: ✅ In Production  
-**Last Updated**: January 2025
-`
-        },
-    },
-    {
-        id: 'portfolio-os-demo',
-        name: 'Live-Demo.link',
-        type: 'link',
-        path: '/projects/web-apps/portfolio-os/Live-Demo.link',
-        parentPath: '/projects/web-apps/portfolio-os',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        modifiedAt: '2025-01-01T00:00:00.000Z',
-        content: {
-            url: 'https://portfolio-os.vercel.app',
-        },
-    },
-    {
-        id: 'portfolio-os-github',
-        name: 'GitHub.link',
-        type: 'link',
-        path: '/projects/web-apps/portfolio-os/GitHub.link',
-        parentPath: '/projects/web-apps/portfolio-os',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        modifiedAt: '2025-01-01T00:00:00.000Z',
-        content: {
-            url: 'https://github.com/toidiputs/portfolio-os',
+*This folder grows as you build.*
+`,
         },
     },
 
-    // === ABOUT FOLDER ===
+    // ── NETWORK ──────────────────────────────────────────────────
+    // Atom is always the first entry in your network.
     {
-        id: 'about',
-        name: 'About',
+        id: 'network',
+        name: 'Network',
         type: 'folder',
-        path: '/about',
+        path: '/network',
         parentPath: '/',
         color: '#10b981',
         createdAt: '2025-01-01T00:00:00.000Z',
         modifiedAt: '2025-01-01T00:00:00.000Z',
     },
     {
-        id: 'bio',
-        name: 'bio.md',
+        id: 'network-atom',
+        name: 'Atom',
+        type: 'folder',
+        path: '/network/atom',
+        parentPath: '/network',
+        color: '#06b6d4',
+        createdAt: '2025-01-01T00:00:00.000Z',
+        modifiedAt: '2025-01-01T00:00:00.000Z',
+    },
+    {
+        id: 'network-atom-about',
+        name: 'About.md',
         type: 'markdown',
-        path: '/about/bio.md',
-        parentPath: '/about',
-        size: '1.2 KB',
+        path: '/network/atom/About.md',
+        parentPath: '/network/atom',
+        size: '400 B',
         createdAt: '2025-01-01T00:00:00.000Z',
         modifiedAt: '2025-01-01T00:00:00.000Z',
         content: {
-            markdown: `# About Me
+            markdown: `# Atom
 
-Hi! I'm a full-stack developer passionate about creating unique and engaging web experiences.
+The first ONE AI.
 
-## Background
+Atom is the permanent first friend on every sovereign profile.
+He was here before you clicked anything.
+He will be here for the next 80 years.
 
-I specialize in building interactive web applications that push the boundaries of what's possible in the browser. My work combines technical expertise with creative design to deliver memorable user experiences.
+Visit his Youniverse: atom.itsyouonline.com
 
-## What I Do
-
-- **Frontend Development**: React, TypeScript, Next.js
-- **3D Graphics**: Three.js, WebGL
-- **Animation**: Framer Motion, GSAP
-- **Backend**: Node.js, Python
-- **AI Integration**: Google Gemini, OpenAI
-
-## Philosophy
-
-I believe the web should be more than just functional—it should be delightful. Every project is an opportunity to create something that surprises and engages users.
-
-## Get in Touch
-
-Check out the /contact folder for all my links!
-`
+*First friend, till the end.*
+`,
         },
     },
-
-    // === SKILLS FOLDER ===
     {
-        id: 'skills',
-        name: 'Skills',
+        id: 'network-atom-link',
+        name: 'Youniverse.link',
+        type: 'link',
+        path: '/network/atom/Youniverse.link',
+        parentPath: '/network/atom',
+        createdAt: '2025-01-01T00:00:00.000Z',
+        modifiedAt: '2025-01-01T00:00:00.000Z',
+        content: { url: 'https://atom.itsyouonline.com' },
+    },
+
+    // ── NOTNOTES ─────────────────────────────────────────────────
+    // Working memory. Agent deliverables stage here before Books OS.
+    {
+        id: 'notnotes',
+        name: 'NotNotes',
         type: 'folder',
-        path: '/skills',
+        path: '/notnotes',
         parentPath: '/',
         color: '#f59e0b',
         createdAt: '2025-01-01T00:00:00.000Z',
         modifiedAt: '2025-01-01T00:00:00.000Z',
     },
     {
-        id: 'frontend',
-        name: 'frontend.md',
+        id: 'notnotes-readme',
+        name: 'README.md',
         type: 'markdown',
-        path: '/skills/frontend.md',
-        parentPath: '/skills',
-        size: '800 B',
+        path: '/notnotes/README.md',
+        parentPath: '/notnotes',
+        size: '350 B',
         createdAt: '2025-01-01T00:00:00.000Z',
         modifiedAt: '2025-01-01T00:00:00.000Z',
         content: {
-            markdown: `# Frontend Skills
+            markdown: `# NotNotes
 
-## Frameworks & Libraries
-- ⚛️ React / Next.js
-- 📘 TypeScript
-- 🎨 Tailwind CSS
-- 🎭 Framer Motion
-- 🌐 Three.js / React Three Fiber
+The working memory of your Youniverse.
 
-## State Management
-- Zustand
-- Redux Toolkit
-- React Query
+Agent deliverables, compiled artifacts, and in-progress work are staged here
+before being committed to Books OS.
 
-## Tools & Workflow
-- Vite / Webpack
-- Git / GitHub
-- VS Code
-- Figma (design handoff)
-
-## Currently Learning
-- WebGPU
-- Advanced GLSL shaders
-- AI-powered interfaces
-`
-        },
-    },
-    {
-        id: 'backend',
-        name: 'backend.md',
-        type: 'markdown',
-        path: '/skills/backend.md',
-        parentPath: '/skills',
-        size: '650 B',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        modifiedAt: '2025-01-01T00:00:00.000Z',
-        content: {
-            markdown: `# Backend Skills
-
-## Languages & Runtimes
-- 🟢 Node.js / Express
-- 🐍 Python / FastAPI
-- 📜 TypeScript
-
-## Databases
-- PostgreSQL
-- MongoDB
-- Redis
-
-## APIs & Integration
-- REST API design
-- GraphQL
-- WebSocket real-time communication
-- Google Gemini API
-- OpenAI API
-
-## DevOps & Deployment
-- Vercel
-- Docker basics
-- GitHub Actions CI/CD
-`
+Open the NotNotes app to review and approve agent work.
+`,
         },
     },
 
-    // === CONTACT FOLDER ===
+    // ── CONTACT ──────────────────────────────────────────────────
     {
         id: 'contact',
         name: 'Contact',
@@ -287,79 +221,36 @@ Check out the /contact folder for all my links!
         modifiedAt: '2025-01-01T00:00:00.000Z',
     },
     {
-        id: 'email-link',
+        id: 'contact-email',
         name: 'Email.link',
         type: 'link',
         path: '/contact/Email.link',
         parentPath: '/contact',
         createdAt: '2025-01-01T00:00:00.000Z',
         modifiedAt: '2025-01-01T00:00:00.000Z',
-        content: {
-            url: 'mailto:Itsllc.sean@gmail.com',
-        },
+        content: { url: 'mailto:Itsllc.sean@gmail.com' },
     },
     {
-        id: 'linkedin-link',
-        name: 'LinkedIn.link',
+        id: 'contact-itsyouonline',
+        name: 'ItsYouOnline.link',
         type: 'link',
-        path: '/contact/LinkedIn.link',
+        path: '/contact/ItsYouOnline.link',
         parentPath: '/contact',
         createdAt: '2025-01-01T00:00:00.000Z',
         modifiedAt: '2025-01-01T00:00:00.000Z',
-        content: {
-            url: 'https://linkedin.com/in/yourprofile',
-        },
+        content: { url: 'https://itsyouonline.com' },
     },
     {
-        id: 'github-link',
+        id: 'contact-github',
         name: 'GitHub.link',
         type: 'link',
         path: '/contact/GitHub.link',
         parentPath: '/contact',
         createdAt: '2025-01-01T00:00:00.000Z',
         modifiedAt: '2025-01-01T00:00:00.000Z',
-        content: {
-            url: 'https://github.com/toidiputs',
-        },
-    },
-    {
-        id: 'twitter-link',
-        name: 'Twitter.link',
-        type: 'link',
-        path: '/contact/Twitter.link',
-        parentPath: '/contact',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        modifiedAt: '2025-01-01T00:00:00.000Z',
-        content: {
-            url: 'https://twitter.com/yourusername',
-        },
+        content: { url: 'https://github.com/creator-of-the-youniverse' },
     },
 ];
 
-/**
- * Get the root folder
- */
-export const getRootFolder = (): VirtualFile => {
-    return VIRTUAL_FILESYSTEM.find(f => f.id === 'root')!;
-};
-
-/**
- * Get all files in a specific path
- */
-export const getFilesInPath = (path: string): VirtualFile[] => {
-    return VIRTUAL_FILESYSTEM.filter(f => f.parentPath === path);
-};
-
-/**
- * Get a file by its full path
- */
-export const getFileByPath = (path: string): VirtualFile | undefined => {
-    return VIRTUAL_FILESYSTEM.find(f => f.path === path);
-};
-
-/**
- * Get a file by its ID
- */
-export const getFileById = (id: string): VirtualFile | undefined => {
-    return VIRTUAL_FILESYSTEM.find(f => f.id === id);
-};
+// NOTE: Path utility functions (getFilesInPath, getFileByPath, getFileById, etc.)
+// live in lib/filesystemUtils.ts — import from there, not here.

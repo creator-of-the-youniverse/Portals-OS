@@ -105,12 +105,12 @@ export const pathExists = (path: string): boolean => {
  */
 export const getPathBreadcrumbs = (path: string): Array<{ name: string; path: string }> => {
     if (path === '/') {
-        return [{ name: 'C:/', path: '/' }];
+        return [{ name: '~', path: '/' }];
     }
 
     const parts = path.split('/').filter(p => p);
     const breadcrumbs: Array<{ name: string; path: string }> = [
-        { name: 'C:/', path: '/' }
+        { name: '~', path: '/' }
     ];
 
     let currentPath = '';

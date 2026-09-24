@@ -63,9 +63,8 @@ const FileManager: React.FC = () => {
             if (file.type === 'link' && file.content?.url) {
                 window.open(file.content.url, '_blank');
             } else {
-                // For now, just log. Viewers coming next.
-                console.log('Opening file:', file.name);
-                openFile(file.id);
+                // Open file in FileViewer window
+                openWindow('fileViewer', { width: 720, height: 520 }, { fileId: file.id });
             }
         }
     };
@@ -121,18 +120,24 @@ const FileManager: React.FC = () => {
             </div>
 
             <div className="flex-1 flex overflow-hidden">
-                {/* Sidebar (Simplified for now - just quick links) */}
+                {/* Sidebar — Youniverse quick links */}
                 <div className="w-48 border-r border-[hsl(var(--border-hsl))] bg-[hsl(var(--card-hsl))] p-2 hidden md:block">
-                    <div className="text-xs font-semibold text-[hsl(var(--muted-foreground-hsl))] mb-2 px-2 uppercase tracking-wider">Favorites</div>
+                    <div className="text-xs font-semibold text-[hsl(var(--muted-foreground-hsl))] mb-2 px-2 uppercase tracking-wider">Locations</div>
                     <nav className="space-y-1">
                         <button onClick={() => handleNavigate('/')} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm ${currentPath === '/' ? 'bg-[hsl(var(--accent-strong-hsl))] text-white' : 'hover:bg-[hsl(var(--secondary-hsl))]'}`}>
                             <Home size={16} /> Home
                         </button>
+                        <button onClick={() => handleNavigate('/youniverse')} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm ${currentPath.startsWith('/youniverse') ? 'bg-[hsl(var(--accent-strong-hsl))] text-white' : 'hover:bg-[hsl(var(--secondary-hsl))]'}`}>
+                            <Folder size={16} /> Youniverse
+                        </button>
                         <button onClick={() => handleNavigate('/projects')} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm ${currentPath.startsWith('/projects') ? 'bg-[hsl(var(--accent-strong-hsl))] text-white' : 'hover:bg-[hsl(var(--secondary-hsl))]'}`}>
                             <Folder size={16} /> Projects
                         </button>
-                        <button onClick={() => handleNavigate('/about')} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm ${currentPath.startsWith('/about') ? 'bg-[hsl(var(--accent-strong-hsl))] text-white' : 'hover:bg-[hsl(var(--secondary-hsl))]'}`}>
-                            <Folder size={16} /> About
+                        <button onClick={() => handleNavigate('/network')} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm ${currentPath.startsWith('/network') ? 'bg-[hsl(var(--accent-strong-hsl))] text-white' : 'hover:bg-[hsl(var(--secondary-hsl))]'}`}>
+                            <Folder size={16} /> Network
+                        </button>
+                        <button onClick={() => handleNavigate('/notnotes')} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm ${currentPath.startsWith('/notnotes') ? 'bg-[hsl(var(--accent-strong-hsl))] text-white' : 'hover:bg-[hsl(var(--secondary-hsl))]'}`}>
+                            <Folder size={16} /> NotNotes
                         </button>
                         <button onClick={() => handleNavigate('/contact')} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm ${currentPath.startsWith('/contact') ? 'bg-[hsl(var(--accent-strong-hsl))] text-white' : 'hover:bg-[hsl(var(--secondary-hsl))]'}`}>
                             <Folder size={16} /> Contact

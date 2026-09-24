@@ -33,32 +33,33 @@ FILESYSTEM:
   open <file>   - Open file/folder in GUI
   find <name>   - Search for files
 
-PORTFOLIO:
-  projects  - View all projects
-  about     - Open bio
-  contact   - View contact info
+YOUNIVERSE:
+  youniverse  - View your Youniverse root
+  projects    - View all projects
+  network     - View your network (Atom + connections)
+  contact     - View contact info
 
 OTHER:
   emails    - List collected emails`;
 
 const NEOFETCH_OUTPUT = `
         ,.=:!!t3Z3z.,                -----------
-       :i:i|i|i|i|i|i:iH3s.,           OS: Portfolio OS
-      |i|i|i|i|i|i|i|i|i|i|iHS.        Kernel: 1.0.0-react
-      ;i|i|i|i|i|i|i|i|i|i|i|i|i:       Uptime: just now
-     .i|i|i|i|i|i|i|i|i|i|i|i|i|i:      Shell: term.sh
-     :|i|i|i|i|i|i|i|i|i|i|i|i|i|i|      Resolution: 1920x1080
-     ;i|i|i|i|i|i|i|i|i|i|i|i|i|i|i      DE: PortfolioWM
-    :i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i     CPU: Your Brain
+       :i:i|i|i|i|i|i:iH3s.,           OS: Portals OS · The Youniverse
+      |i|i|i|i|i|i|i|i|i|i|iHS.        Kernel: 1.0.0-sovereign
+      ;i|i|i|i|i|i|i|i|i|i|i|i|i:       Uptime: since your first @
+     .i|i|i|i|i|i|i|i|i|i|i|i|i|i:      Shell: youniverse.sh
+     :|i|i|i|i|i|i|i|i|i|i|i|i|i|i|      Resolution: infinite
+     ;i|i|i|i|i|i|i|i|i|i|i|i|i|i|i      DE: Portals WM
+    :i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i     CPU: Your Sovereignty
    .i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i    GPU: Imagination
-   |i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|   Memory: Probably fine
+   |i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|   Memory: Atom has it
 `;
 
 const Terminal: React.FC = () => {
     const [input, setInput] = useState('');
     const [output, setOutput] = useState<OutputLine[]>([
-        { type: 'output', text: 'Portfolio OS Terminal [Version 1.0.0]' },
-        { type: 'output', text: '(c) Portfolio Corporation. All rights reserved.' },
+        { type: 'output', text: 'Portals OS Terminal [Version 1.0.0]' },
+        { type: 'output', text: '(c) ItsYouOnline. All rights reserved.' },
         { type: 'output', text: 'Type "help" for a list of commands.' },
     ]);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -207,8 +208,9 @@ const Terminal: React.FC = () => {
                     window.open(file.content.url, '_blank');
                     cmdOutput = [{ type: 'output', text: `Opening link: ${file.content.url}` }];
                 } else {
+                    // Open file in FileViewer window
+                    openWindow('fileViewer', { width: 700, height: 500 }, { fileId: file.id });
                     cmdOutput = [{ type: 'output', text: `Opening: ${file.name}` }];
-                    // TODO: Open file in appropriate viewer
                 }
                 break;
             }
@@ -241,23 +243,35 @@ const Terminal: React.FC = () => {
                 break;
             }
 
-            // Portfolio shortcuts
+            // Youniverse shortcuts
+            case 'youniverse':
+                navigateToPath('/youniverse');
+                openWindow('fileManager');
+                cmdOutput = [{ type: 'output', text: 'Opening Youniverse...' }];
+                break;
+
             case 'projects':
                 navigateToPath('/projects');
                 openWindow('fileManager');
-                cmdOutput = [{ type: 'output', text: 'Opening Projects folder...' }];
+                cmdOutput = [{ type: 'output', text: 'Opening Projects...' }];
+                break;
+
+            case 'network':
+                navigateToPath('/network');
+                openWindow('fileManager');
+                cmdOutput = [{ type: 'output', text: 'Opening Network...' }];
                 break;
 
             case 'about':
-                navigateToPath('/about');
+                navigateToPath('/youniverse');
                 openWindow('fileManager');
-                cmdOutput = [{ type: 'output', text: 'Opening About folder...' }];
+                cmdOutput = [{ type: 'output', text: 'Opening Youniverse...' }];
                 break;
 
             case 'contact':
                 navigateToPath('/contact');
                 openWindow('fileManager');
-                cmdOutput = [{ type: 'output', text: 'Opening Contact folder...' }];
+                cmdOutput = [{ type: 'output', text: 'Opening Contact...' }];
                 break;
 
             case '':

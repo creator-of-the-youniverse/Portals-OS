@@ -91,10 +91,10 @@ export const APPS_CONFIG: Record<BuiltInAppId, AppDefinition> = {
   },
   ones: {
     id: "ones" as BuiltInAppId,
-    name: "ONEAI",
+    name: "Atom",
     icon: Sparkles,
     component: lazy(() => import("./apps/OneAIApp")),
-    description: "Sovereign personal AI interface.",
+    description: "Atom — your first ONE AI. First friend, till the end.",
   },
 };
 
