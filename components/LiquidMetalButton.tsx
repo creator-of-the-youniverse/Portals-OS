@@ -23,14 +23,14 @@ export function LiquidMetalButton({
   const rippleId = useRef(0);
 
   const dimensions = useMemo(() => {
-    // Sized to 48x48 to match the w-12 h-12 tailwind classes from the shatter button
+    // Sized to 32x32 to match the w-8 h-8 tailwind classes from the shatter button
     return {
-      width: 48,
-      height: 48,
-      innerWidth: 44,
-      innerHeight: 44,
-      shaderWidth: 48,
-      shaderHeight: 48,
+      width: 32,
+      height: 32,
+      innerWidth: 28,
+      innerHeight: 28,
+      shaderWidth: 32,
+      shaderHeight: 32,
     };
   }, []);
 
@@ -87,7 +87,7 @@ export function LiquidMetalButton({
               u_offsetY: -0.1,
             },
             undefined,
-            0.6,
+            2.5,
           );
         }
       } catch (error) {
@@ -107,23 +107,23 @@ export function LiquidMetalButton({
 
   const handleMouseEnter = () => {
     setIsHovered(true);
-    shaderMount.current?.setSpeed?.(1);
+    shaderMount.current?.setSpeed?.(4.0);
   };
 
   const handleMouseLeave = () => {
     setIsHovered(false);
     setIsPressed(false);
-    shaderMount.current?.setSpeed?.(0.6);
+    shaderMount.current?.setSpeed?.(2.5);
   };
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (shaderMount.current?.setSpeed) {
-      shaderMount.current.setSpeed(2.4);
+      shaderMount.current.setSpeed(8.0);
       setTimeout(() => {
         if (isHovered) {
-          shaderMount.current?.setSpeed?.(1);
+          shaderMount.current?.setSpeed?.(4.0);
         } else {
-          shaderMount.current?.setSpeed?.(0.6);
+          shaderMount.current?.setSpeed?.(2.5);
         }
       }, 300);
     }
