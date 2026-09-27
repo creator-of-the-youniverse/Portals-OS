@@ -116,9 +116,10 @@ The intelligence layer is strictly demarcated into distinct responsibilities to 
 | Entity | Role | Nature | Sovereign Location |
 |---|---|---|---|
 | **ONEAI** (first instance: **Atom**) | Personal Companion & Identity Anchor | Sovereign continuous intelligence; knows the user's history, tone, and goals. Atom is pre-pinned to every Youniverse — the "Tom from MySpace" of the system — first friend, till the end. | Client-side / edge on user's device |
-| **Weaver** | Spatial Architect & In-System Builder | Generative UI/Space agent (Agent Zero model); constructs widgets, themes, and environments. | Portals OS spatial runtime |
+| **Weaver** | Spatial Architect & Generative PWA Engine | The "Facebook Killer" generative UI/Space agent; constructs widgets, PWAs, themes, and entire environments on the fly. | Portals OS spatial runtime |
+| **Club Youniverse** | The Voice of the Youniverse | Live DJ radio and persistent widget delivering autonomous Suno-generated audio. Drives atmosphere and continuous presence. | Embedded OS Widget / DJ Booth |
 | **The Oracle** | Tactical Diagnostic Commander | Diagnostic tool; analyzes bottlenecks, designs game plans, and orchestrates agents. | Portals OS command interface |
-| **Nexus PPSA** | Operational Workforce (167+ Agents) | Domain specialists executing targeted jobs (content, validation, cash flow, dev). | Embedded modular PWAs |
+| **Nexus PPSA** | The Ascension Engine (0 to Exit) | Structured execution layer designed to take users from $0 to $100K+ and eventual brand exit. | Embedded modular PWAs |
 | **NotNotes** | Active Working Memory & Staging Ground | Assembly workspace for combining raw agent outputs into finished products. | Session-backed project layer |
 | **Books OS** | The Younique Archives | Sovereign vault of historical milestones, approved assets, and financial ledgers. | Encrypted local-first persistent vault |
 
@@ -297,20 +298,26 @@ To prevent namespace squatting and establish a healthy, high-value ecosystem:
 
 ---
 
-## 7. The Nexus Fleet (10 Tactical Squads / 67 Nodes)
+## 7. The Nexus Fleet (The Ascension Engine)
 
-| Squad | Node Count | Core Business Pain Point Solved |
-|---|---|---|
-| **1. Bridge Validation** | 7 | Eliminates idea paralysis; validates demand before writing code or spending capital |
-| **2. Gamma Production** | 7 | Solves content bottleneck; writes viral posts, video hooks, sales pages, and emails |
-| **3. Sales Engineering** | 7 | Solves pipeline drought; builds funnels, manages outreach, and handles objections |
-| **4. Customer Success** | 6 | Prevents churn; delivers onboarding, retention automations, and satisfaction surveys |
-| **5. Cash Flow** | 7 | Protects margins; automates bookkeeping, tax reserves, pricing models, and Stripe ops |
-| **6. Developer** | 7 | Bridges tech divide; codes micro-apps, landing pages, webhook automations, and scripts |
-| **7. Research** | 6 | Uncovers hidden market opportunities, competitor weaknesses, and pricing arbitrage |
-| **8. Shadow Operations** | 6 | Handles invisible back-office work: scrapers, monitors, cron triggers, and sync jobs |
-| **9. Community Manager** | 7 | Transforms followers into superfans; designs community games, rituals, and discussions |
-| **10. Project Command** | 7 | Prevents project stall; prioritizes tasks, manages timelines, and orchestrates squads |
+Nexus is no longer structured simply as a loose collection of "pain point solvers." Instead, Nexus is the structured progression and execution engine of the Youniverse. 
+
+It is specifically engineered to take a user from **Day 0** (no digital presence, never made a single penny online) all the way to a **Final Exit** of the business they built and automated entirely within their Youniverse.
+
+The 10 Tactical Squads are orchestrated to push the user through this journey milestone by milestone:
+
+| Squad / Phase | Core Objective (The Journey from $0 to Exit) |
+|---|---|
+| **1. Identity & Foundation** | Taking the user from zero presence to a branded, sovereign identity. Discovering voice and initial offer. |
+| **2. The First Dollar** | Validating demand and generating the very first $1 online. Building micro-funnels and single-click checkouts. |
+| **3. The First $100** | Proving the concept. Early audience engagement, basic content hooks, and manual outreach scaling. |
+| **4. The $1,000 Milestone** | Systematizing sales. Deploying basic email sequences, community rituals, and early retention tactics. |
+| **5. The $10k Monthly Engine** | Shifting from manual to automated. Automating bookkeeping, scaling lead generation, and dynamic pricing. |
+| **6. The $100k Ecosystem** | Multi-product scaling. Building custom webhooks, micro-apps, and robust retention loops. |
+| **7. Brand Monopoly** | Market domination. Deep research, competitor weakness exploitation, and aggressive brand positioning. |
+| **8. Shadow Automation** | Hands-free scaling. Invisible back-office scrapers, monitors, and sync jobs running 24/7. |
+| **9. The Executive Command** | Multi-brand orchestration. Wealth management, passive yield tracking, and high-level project command. |
+| **10. The Final Exit** | Automating the final handoff. Institutional data-room preparation, valuation modeling, and executing the brand sale. |
 
 ---
 
