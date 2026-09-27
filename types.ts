@@ -85,11 +85,13 @@ export interface KernelState {
   theme: Theme;
   initialGreetingSpoken: boolean;
   micPermissionGranted: boolean;
+  isRadioWidgetVisible: boolean;
   currentPath: string; // Current directory in virtual filesystem
   projectFolders: ProjectFolder[]; // User's project folder bookmarks
 
   setInitialGreetingSpoken: (status: boolean) => void;
   setMicPermissionGranted: (status: boolean) => void;
+  setRadioWidgetVisible: (status: boolean) => void;
 
   openWindow: (appId: AppId, size?: { width: number; height: number }, metadata?: any) => void;
   closeWindow: (id: string) => void;

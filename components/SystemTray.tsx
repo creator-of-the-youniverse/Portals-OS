@@ -221,6 +221,18 @@ const SystemTray: React.FC = () => {
                 <span className="hidden sm:inline text-[11px] font-medium tracking-wide">Install</span>
             </button>
 
+            {/* Radio Toggle */}
+            <button
+                onClick={() => useKernel.getState().setRadioWidgetVisible(!useKernel.getState().isRadioWidgetVisible)}
+                className={`p-2 rounded transition-colors ${useKernel(s => s.isRadioWidgetVisible) ? 'text-purple-400 bg-purple-500/20' : 'text-white/70 hover:bg-white/10'}`}
+                title="Toggle Club Youniverse Radio"
+            >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="2"></circle>
+                    <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path>
+                </svg>
+            </button>
+
             {/* Volume */}
             <div className="relative" ref={volumeRef}>
                 <button

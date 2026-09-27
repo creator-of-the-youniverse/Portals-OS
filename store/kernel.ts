@@ -41,6 +41,7 @@ const useKernelStore = create<KernelState>()(
       theme: "dark",
       initialGreetingSpoken: false,
       micPermissionGranted: false,
+      isRadioWidgetVisible: true,
       isMobile: typeof window !== 'undefined' ? window.innerWidth < 768 : false,
       projectFolders: [], // User's project folder bookmarks
       currentPath: "/", // Current directory in virtual filesystem
@@ -411,6 +412,7 @@ const useKernelStore = create<KernelState>()(
         set((state) => ({
           collectedEmails: [...state.collectedEmails, email],
         })),
+      setRadioWidgetVisible: (status) => set({ isRadioWidgetVisible: status }),
       toggleSidebar: () =>
         set((state) => ({
           isSidebarOpen: !state.isSidebarOpen,
