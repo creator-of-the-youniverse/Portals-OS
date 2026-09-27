@@ -32,9 +32,18 @@
   "include": [
     "src/**/*",
     "components/**/*",
-    "lib/**/*"
+    "contexts/**/*",
+    "lib/**/*",
+    "apps/**/*",
+    "services/**/*",
+    "hooks/**/*",
+    "store/**/*",
+    "constants/**/*",
+    "*.ts",
+    "*.tsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "@/**/*"
   ]
 }

@@ -11,7 +11,8 @@ export type BuiltInAppId =
   | "settings"
   | "omniedia"
   | "messages"
-  | "ones";
+  | "ones"
+  | "clubYouniverse";
 
 // Allow dynamic folder IDs like "folder:my-project" AND agent IDs like "AC", "TOSO"
 export type AppId = BuiltInAppId | `folder:${string}` | (string & {});

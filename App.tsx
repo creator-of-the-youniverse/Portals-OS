@@ -23,6 +23,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Analytics } from "@vercel/analytics/react";
 import { PwaInstallPrompt } from "./components/PwaInstallPrompt";
+import { ClubRadioProvider } from "./contexts/ClubRadioContext";
+import YouuniverseRadioBar from "./components/YouuniverseRadioBar";
 
 const App: React.FC = () => {
   const windows = useKernel((state) => state.windows);
@@ -174,6 +176,7 @@ const App: React.FC = () => {
   const showWelcome = !isYouniverseRoute && !isClaimRoute && !hasWelcomed;
 
   return (
+    <ClubRadioProvider>
     <AnimatePresence mode="sync">
       {showClaimRoute ? (
         <ClaimYouniverse key="claim" />
@@ -234,6 +237,7 @@ const App: React.FC = () => {
           <Sidebar />
           <VoiceAssistant />
           <VoiceAssistantOverlay />
+          <YouuniverseRadioBar />
           <CheckoutHandler />
 
         </motion.div>
@@ -241,6 +245,7 @@ const App: React.FC = () => {
       <Analytics />
       <PwaInstallPrompt />
     </AnimatePresence>
+    </ClubRadioProvider>
   );
 };
 

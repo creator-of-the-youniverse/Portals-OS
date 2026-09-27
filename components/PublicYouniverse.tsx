@@ -1,15 +1,34 @@
 import React from "react";
 import PortalLayout from "./PortalLayout";
 import { useYouniverse } from "./YouniverseProvider";
-import { Rocket, ShieldCheck, Sparkles, ExternalLink, ArrowRight, Layers, Cpu } from "lucide-react";
-import { motion } from "framer-motion";
+import { Rocket, ShieldCheck, Sparkles, ExternalLink, ArrowRight, Layers, Cpu, Radio, Volume2, VolumeX } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useClubRadio } from "../contexts/ClubRadioContext";
 
 interface PublicYouniverseProps {
   onEnterOs?: () => void;
 }
 
+/** Tiny animated waveform for the ambient strip */
+const MiniWave: React.FC<{ isPlaying: boolean }> = ({ isPlaying }) => (
+  <div className="flex items-end gap-[1.5px] h-3">
+    {[0.5, 0.9, 0.6, 1.0, 0.7, 0.85].map((h, i) => (
+      <motion.div
+        key={i}
+        className="w-[1.5px] rounded-full bg-purple-400"
+        animate={isPlaying ? {
+          height: [`${12 * h}px`, `${4 * h}px`, `${10 * h}px`],
+        } : { height: "2px" }}
+        transition={{ duration: 0.7 + i * 0.08, repeat: Infinity, repeatType: "mirror", ease: "easeInOut", delay: i * 0.05 }}
+        style={{ minHeight: "2px" }}
+      />
+    ))}
+  </div>
+);
+
 const PublicYouniverse: React.FC<PublicYouniverseProps> = ({ onEnterOs }) => {
   const { identity } = useYouniverse();
+  const radio = useClubRadio();
 
   if (!identity || identity.kind !== "identity" || !identity.username) {
     return null;
@@ -23,6 +42,8 @@ const PublicYouniverse: React.FC<PublicYouniverseProps> = ({ onEnterOs }) => {
       window.location.reload();
     }
   };
+
+  const { nowPlaying, isPlaying, isMuted, togglePlay, setMuted } = radio || {};
 
   return (
     <PortalLayout>
@@ -71,6 +92,55 @@ const PublicYouniverse: React.FC<PublicYouniverseProps> = ({ onEnterOs }) => {
             Powered by client-side ONEAI, Weaver dynamic spatial builder, and Portals OS.
           </p>
 
+          {/* ── AMBIENT RADIO STRIP — The Voice of the Youniverse ── */}
+          <AnimatePresence>
+            {radio && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: 0.6, duration: 0.5 }}
+                className="mt-6 w-full flex items-center gap-3 rounded-xl border border-purple-500/20 bg-black/50 backdrop-blur-xl px-4 py-3 shadow-[0_0_30px_rgba(168,85,247,0.12)]"
+              >
+                {/* Play/mute button */}
+                <button
+                  onClick={() => {
+                    if (!radio) return;
+                    if (isMuted) setMuted!(false);
+                    else togglePlay!();
+                  }}
+                  className="flex-none w-8 h-8 rounded-lg bg-purple-600/20 border border-purple-500/30 flex items-center justify-center hover:bg-purple-600/40 transition-colors"
+                >
+                  {(isPlaying && !isMuted) ? (
+                    <MiniWave isPlaying={true} />
+                  ) : (
+                    <Radio className="h-3.5 w-3.5 text-purple-400" />
+                  )}
+                </button>
+
+                {/* Song info */}
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-purple-400/60 mb-0.5">
+                    Club Youniverse — Live
+                  </div>
+                  <div className="text-xs font-semibold text-white truncate">
+                    {nowPlaying?.title || "Tuning in..."}
+                  </div>
+                  {nowPlaying?.artistName && (
+                    <div className="text-[10px] text-white/40 font-mono truncate">{nowPlaying.artistName}</div>
+                  )}
+                </div>
+
+                {/* Mute toggle */}
+                <button
+                  onClick={() => setMuted && setMuted(!isMuted)}
+                  className="flex-none text-white/30 hover:text-purple-400 transition-colors"
+                >
+                  {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Primary CTA: Launch / Enter Portals OS */}
           <div className="mt-8 flex w-full flex-col sm:flex-row items-center justify-center gap-3">
             <button
@@ -106,9 +176,9 @@ const PublicYouniverse: React.FC<PublicYouniverseProps> = ({ onEnterOs }) => {
             </div>
 
             <div className="rounded-xl border border-white/5 bg-white/5 p-3 backdrop-blur-sm">
-              <ShieldCheck className="h-4 w-4 text-pink-400 mb-1.5" />
-              <div className="text-[11px] font-semibold text-white">Books OS</div>
-              <div className="text-[10px] text-white/50 leading-tight mt-0.5">100% offline vault</div>
+              <Radio className="h-4 w-4 text-pink-400 mb-1.5" />
+              <div className="text-[11px] font-semibold text-white">Club</div>
+              <div className="text-[10px] text-white/50 leading-tight mt-0.5">Voice of the Youniverse</div>
             </div>
           </div>
         </motion.div>

@@ -1,6 +1,6 @@
 import React, { lazy } from "react";
 import { AppId, BuiltInAppId, AppDefinition, ProjectFolder } from "./types";
-import { FileText, Folder, FolderOpen, Sparkles } from "lucide-react";
+import { FileText, Folder, FolderOpen, Sparkles, Radio, Globe } from "lucide-react";
 import {
   TerminalIcon,
   ContactIcon,
@@ -96,6 +96,34 @@ export const APPS_CONFIG: Record<BuiltInAppId, AppDefinition> = {
     component: lazy(() => import("./apps/OneAIApp")),
     description: "Atom — your first ONE AI. First friend, till the end.",
   },
+  clubYouniverse: {
+    id: "clubYouniverse" as BuiltInAppId,
+    name: "Club Youniverse",
+    icon: Radio,
+    component: lazy(() => import("./apps/ClubYouniverse")),
+    description: "The Voice of the Youniverse — live AI radio, voting, and the DJ booth.",
+  },
+  nexusCommand: {
+    id: "nexusCommand" as BuiltInAppId,
+    name: "Nexus Roadmap",
+    icon: Sparkles,
+    component: lazy(() => import("./apps/NexusProgressionApp")),
+    description: "Your $0 to $1M+ structured roadmap and command center.",
+  },
+  weaver: {
+    id: "weaver" as BuiltInAppId,
+    name: "Weaver",
+    icon: Sparkles,
+    component: lazy(() => import("./apps/WeaverApp")),
+    description: "Spatial Architect. Weave any website into your Youniverse as a PWA.",
+  },
+  webApp: {
+    id: "webApp" as BuiltInAppId,
+    name: "Web Frame",
+    icon: Globe,
+    component: lazy(() => import("./apps/WebApp")),
+    description: "Generic PWA container for weaved web apps.",
+  }
 };
 
 export const APPS = Object.values(APPS_CONFIG);
@@ -103,6 +131,8 @@ export const APPS = Object.values(APPS_CONFIG);
 // Core system apps that appear in start menu and circular menu
 const CORE_APP_IDS: BuiltInAppId[] = [
   "oracle",
+  "weaver" as BuiltInAppId,
+  "nexusCommand" as BuiltInAppId,
   "subscription",
   "notionLike",
   "terminal",
@@ -113,6 +143,7 @@ const CORE_APP_IDS: BuiltInAppId[] = [
   "omniedia" as BuiltInAppId,
   "messages" as BuiltInAppId,
   "ones" as BuiltInAppId,
+  "clubYouniverse" as BuiltInAppId,
 ];
 
 /**
