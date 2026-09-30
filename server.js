@@ -4,9 +4,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
+import { PrismaClient } from "@prisma/client";
 
 dotenv.config();
 
+const prisma = new PrismaClient();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -358,112 +360,151 @@ app.post("/api/gemini:generate", async (req, res) => {
 });
 
 // ============================================================================
-// FIRST-TOUCH ONBOARDING — AUTH ENDPOINTS
+// FIRST-TOUCH ONBOARDING — AUTH ENDPOINTS (PRISMA DB)
 // ============================================================================
 
-// In-memory provisional tenant store (swap to Supabase/Neon for production)
-const provisionalTenants = new Map();
-
-// POST /api/v1/auth/claim — Create provisional tenant
-app.post("/api/v1/auth/claim", (req, res) => {
+// POST /api/v1/auth/claim — Create User & Youniverse
+app.post("/api/v1/auth/claim", async (req, res) => {
   const { handle, email } = req.body;
 
   if (!handle || !email) {
     return res.status(400).json({ success: false, error: "Handle and email are required" });
   }
 
-  // Validate handle format
   const handleRegex = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
   if (!handleRegex.test(handle)) {
     return res.status(400).json({ success: false, error: "Invalid handle format" });
   }
 
-  // Check if already claimed
-  if (provisionalTenants.has(handle)) {
-    const existing = provisionalTenants.get(handle);
-    if (existing.isVerified && existing.ownerEmail !== email) {
+  try {
+    // 1. Check if Handle is taken
+    const existingHandle = await prisma.youniverse.findUnique({
+      where: { handle }
+    });
+    
+    if (existingHandle) {
       return res.status(409).json({ success: false, error: "Handle already claimed" });
     }
+
+    // 2. Check "One Free Youniverse" rule via Email
+    let user = await prisma.user.findUnique({
+      where: { email },
+      include: { youniverses: true }
+    });
+
+    if (user && user.youniverses.length > 0) {
+      return res.status(402).json({ success: false, error: "payment_required" });
+    }
+
+    // 3. Create User if they don't exist
+    if (!user) {
+      user = await prisma.user.create({
+        data: { email }
+      });
+    }
+
+    // 4. Create the Youniverse (Provisional/Free Tier)
+    const newYouniverse = await prisma.youniverse.create({
+      data: {
+        handle,
+        ownerId: user.id,
+        isPrimary: true,
+        tier: "FREE"
+      }
+    });
+
+    // 5. Create a provisional session token (magic link equivalent)
+    const sessionToken = `prov_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour expiry
+
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        refreshToken: sessionToken,
+        expiresAt,
+        userAgent: req.headers['user-agent'] || null,
+      }
+    });
+
+    console.log(`[AUTH DB] Provisional tenant created: @${handle} (${email})`);
+    console.log(`[AUTH DB] Verification link would be: /api/v1/auth/verify?token=${sessionToken}`);
+
+    res.json({
+      success: true,
+      subdomain: `${handle}.itsyouonline.com`,
+      sessionToken,
+    });
+  } catch (error) {
+    console.error("[AUTH ERROR]", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
   }
-
-  // Create provisional tenant record
-  const sessionToken = `prov_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-  const tenant = {
-    id: `tn_${Math.random().toString(36).substring(2, 15)}`,
-    handle,
-    subdomain: `${handle}.itsyouonline.com`,
-    ownerEmail: email,
-    isVerified: false,
-    role: "PROVISIONAL_OWNER",
-    sessionToken,
-    createdAt: new Date().toISOString(),
-    verifiedAt: null,
-  };
-
-  provisionalTenants.set(handle, tenant);
-
-  // In production: fire magic-link verification email here
-  console.log(`[AUTH] Provisional tenant created: @${handle} (${email})`);
-  console.log(`[AUTH] Verification link would be: /api/v1/auth/verify?token=${sessionToken}`);
-
-  res.json({
-    success: true,
-    subdomain: tenant.subdomain,
-    sessionToken,
-  });
 });
 
-// GET /api/v1/auth/verify — Verify email via magic link token
-app.get("/api/v1/auth/verify", (req, res) => {
+// GET /api/v1/auth/verify — Verify email via session token
+app.get("/api/v1/auth/verify", async (req, res) => {
   const { token } = req.query;
 
   if (!token) {
     return res.status(400).json({ success: false, error: "Token is required" });
   }
 
-  // Find tenant by session token
-  let foundTenant = null;
-  for (const [, tenant] of provisionalTenants) {
-    if (tenant.sessionToken === token) {
-      foundTenant = tenant;
-      break;
+  try {
+    const session = await prisma.session.findUnique({
+      where: { refreshToken: token },
+      include: { user: { include: { youniverses: true } } }
+    });
+
+    if (!session || session.expiresAt < new Date() || session.revokedAt) {
+      return res.status(404).json({ success: false, error: "Invalid or expired token" });
     }
+
+    // Upgrade User to verified
+    if (!session.user.emailVerified) {
+      await prisma.user.update({
+        where: { id: session.userId },
+        data: { emailVerified: new Date() }
+      });
+    }
+
+    const primaryHandle = session.user.youniverses[0]?.handle || "unknown";
+    console.log(`[AUTH DB] Email verified: @${primaryHandle} upgraded to AUTHENTICATED_OWNER`);
+
+    res.json({
+      success: true,
+      handle: primaryHandle,
+      role: "AUTHENTICATED_OWNER",
+    });
+  } catch (error) {
+    console.error("[AUTH VERIFY ERROR]", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
   }
-
-  if (!foundTenant) {
-    return res.status(404).json({ success: false, error: "Invalid or expired token" });
-  }
-
-  // Upgrade to authenticated owner
-  foundTenant.isVerified = true;
-  foundTenant.role = "AUTHENTICATED_OWNER";
-  foundTenant.verifiedAt = new Date().toISOString();
-
-  console.log(`[AUTH] Email verified: @${foundTenant.handle} upgraded to AUTHENTICATED_OWNER`);
-
-  res.json({
-    success: true,
-    handle: foundTenant.handle,
-    role: "AUTHENTICATED_OWNER",
-  });
 });
 
 // GET /api/v1/auth/availability — Check handle availability
-app.get("/api/v1/auth/availability", (req, res) => {
+app.get("/api/v1/auth/availability", async (req, res) => {
   const { handle } = req.query;
 
   if (!handle) {
     return res.status(400).json({ available: false, error: "Handle is required" });
   }
 
-  const existing = provisionalTenants.get(handle);
-  const isAvailable = !existing || (!existing.isVerified);
+  try {
+    const existing = await prisma.youniverse.findUnique({
+      where: { handle }
+    });
 
-  res.json({
-    available: isAvailable,
-    handle,
-    subdomain: `${handle}.itsyouonline.com`,
-  });
+    res.json({
+      available: !existing,
+      handle,
+      subdomain: `${handle}.itsyouonline.com`,
+    });
+  } catch (error) {
+    console.error("[AUTH AVAILABILITY ERROR]", error);
+    // Gracefully fallback to available if DB fails (e.g. not connected yet)
+    res.json({ available: true, handle, subdomain: `${handle}.itsyouonline.com` });
+  }
 });
 
 // Serve the React app for any non-API routes

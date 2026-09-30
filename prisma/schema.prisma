@@ -1,0 +1,119 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// 1. IDENTITY & SOVEREIGNTY
+// -------------------------------------------------------------
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  emailVerified DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relationships
+  youniverses   Youniverse[]
+  sessions      Session[]
+  devices       DeviceTrust[]
+
+  @@index([email])
+}
+
+// -------------------------------------------------------------
+// 2. YOUNIVERSE SUBDOMAIN ROUTING & BOUNDARIES
+// -------------------------------------------------------------
+model Youniverse {
+  id          String           @id @default(uuid())
+  handle      String           @unique // e.g. "trader" -> trader.itsyouonline.com
+  type        YouniverseType   @default(PERSON)
+  tier        YouniverseTier   @default(FREE)
+  ownerId     String
+  owner       User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  // Operational state
+  isPrimary   Boolean          @default(true) // Enforces "One Free Youniverse" rule
+  isLive      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Scoped Working Memory
+  notNotes    NotNote[]
+
+  @@index([handle])
+  @@index([ownerId])
+}
+
+enum YouniverseType {
+  PERSON
+  AGENT
+}
+
+enum YouniverseTier {
+  FREE
+  PAID
+  ENTERPRISE
+}
+
+// -------------------------------------------------------------
+// 3. SERVER-AUTHORITATIVE SESSIONS & TOKEN REVOCATION
+// -------------------------------------------------------------
+model Session {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String    @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([refreshToken])
+}
+
+// -------------------------------------------------------------
+// 4. IDENTITY-SCOPED NOTNOTES (WORKING MEMORY)
+// -------------------------------------------------------------
+model NotNote {
+  id           String        @id @default(uuid())
+  youniverseId String
+  youniverse   Youniverse    @relation(fields: [youniverseId], references: [id], onDelete: Cascade)
+  title        String
+  content      Json          // Drafts, artifacts, synthesis, agent payloads
+  status       ArtifactState @default(PENDING)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([youniverseId])
+}
+
+enum ArtifactState {
+  PENDING
+  APPROVED
+  REJECTED
+  ARCHIVED_TO_BOOKS
+}
+
+// -------------------------------------------------------------
+// 5. HARDWARE / NFC TRUST (FUTURE CAPABILITY)
+// -------------------------------------------------------------
+model DeviceTrust {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId    String    @unique
+  deviceType  String    // phone, watch, car, terminal
+  publicKey   String
+  revokedAt   DateTime?
+  lastSyncAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, deviceId])
+}

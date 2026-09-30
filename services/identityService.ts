@@ -35,15 +35,6 @@ export async function checkHandleAvailability(
 ): Promise<AvailabilityResult> {
   const subdomain = `${handle}.itsyouonline.com`;
 
-  // ── MOCK BUSINESS LOGIC ──
-  const hardcodedTaken = ['trader', 'alice', 'bob'];
-  const claimedHandles = JSON.parse(localStorage.getItem('claimed_handles') || '[]');
-  
-  if (hardcodedTaken.includes(handle.toLowerCase()) || claimedHandles.includes(handle.toLowerCase())) {
-    return { status: "taken", handle, subdomain };
-  }
-  // ─────────────────────────
-
   try {
     const res = await fetch(
       `${API_BASE}/availability?handle=${encodeURIComponent(handle)}`
@@ -81,28 +72,6 @@ export async function checkHandleAvailability(
 export async function claimHandle(
   payload: ClaimRequest
 ): Promise<ClaimResponse> {
-  // ── MOCK BUSINESS LOGIC: One Free Youniverse Per Email ──
-  // Check if this email has already claimed a free Youniverse on this device
-  const claimedEmails = JSON.parse(localStorage.getItem('claimed_emails') || '[]');
-  
-  if (claimedEmails.includes(payload.email.toLowerCase())) {
-    return {
-      success: false,
-      subdomain: `${payload.handle}.itsyouonline.com`,
-      error: 'payment_required', // Special flag caught by App.tsx
-    };
-  }
-
-  // Record this email as having claimed its free Youniverse
-  claimedEmails.push(payload.email.toLowerCase());
-  localStorage.setItem('claimed_emails', JSON.stringify(claimedEmails));
-  
-  // Record the handle as taken
-  const claimedHandles = JSON.parse(localStorage.getItem('claimed_handles') || '[]');
-  claimedHandles.push(payload.handle.toLowerCase());
-  localStorage.setItem('claimed_handles', JSON.stringify(claimedHandles));
-  // ────────────────────────────────────────────────────────
-
   try {
     const res = await fetch(`${API_BASE}/claim`, {
       method: "POST",
@@ -111,9 +80,24 @@ export async function claimHandle(
     });
 
     if (!res.ok) {
+      if (res.status === 402) {
+        return {
+          success: false,
+          subdomain: `${payload.handle}.itsyouonline.com`,
+          error: 'payment_required',
+        };
+      }
+      if (res.status === 409) {
+        return {
+          success: false,
+          subdomain: `${payload.handle}.itsyouonline.com`,
+          error: 'taken',
+        };
+      }
+      
       const errorText = await res.text().catch(() => "Unknown error");
       console.warn("[identityService] Claim failed:", errorText);
-      // Graceful degradation — let the user proceed provisionally
+      // Graceful degradation — let the user proceed provisionally if DB is down
       return {
         success: true,
         subdomain: `${payload.handle}.itsyouonline.com`,
