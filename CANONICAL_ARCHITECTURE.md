@@ -35,21 +35,24 @@ No major rewrite should occur until the relevant existing functionality has been
 
 itsyouonline.com is the front door to the ecosystem.
 
-It is not merely a landing page.
+It is not merely a landing page. Its primary function is identity discovery, seamless entry into THE YOUNIVERSE, and frictionless onboarding.
 
-Its primary function is identity discovery and entry into THE YOUNIVERSE.
-
-The central interaction is the @ Line.
-
+The central interaction is the @ Line. The interface is intentionally sparse, instantly placing the user into the Portal OS context. 
 Example:
-
 @ Trader
 @ Alice
-@ Bob
 
-A visitor enters a Youniverse identity into the @ Line.
+A visitor enters a Youniverse identity into the @ Line. The gateway behaves dynamically based on the input:
+- **Found Identity**: Instantly resolves and warps the user to the corresponding Youniverse.
+- **Unclaimed Identity (First Touch)**: The user is prompted for an email address directly inline.
 
-The system resolves that identity to the corresponding Youniverse.
+**The First-Touch Onboarding Flow (The Dialogue):**
+Instead of a multi-step web form, new users are immediately plunged into the Youniverse. They are greeted by Atom (visually represented by the FlowingLight orb), who acts as their guide and first friend. Atom conducts an auditory and visual interview via the `DialogueOverlay` to establish their sovereign digital territory.
+
+**Business Logic: One Free Youniverse Per Email**
+To balance frictionless entry with sustainable economics, the architecture strictly enforces a "One Free Youniverse" rule:
+- When an email claims a Youniverse for the first time, they bypass payment and directly enter the free onboarding dialogue.
+- If the system detects that an email has already claimed a Youniverse, the Gateway intercepts the `payment_required` API response and instantly redirects the user to the Checkout/Pay Screen. Secondary Youniverses require a paid tier pack before entry.
 
 ---
 
