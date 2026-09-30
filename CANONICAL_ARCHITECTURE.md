@@ -80,24 +80,30 @@ The Youniverse has two fundamentally different modes.
 
 ---
 
-4. PUBLIC YOUNIVERSE
+4. PUBLIC YOUNIVERSE (THE FRONT LAWN)
 
-Every Youniverse is publicly viewable.
+Every Youniverse has a publicly viewable face. 
 
 A visitor does not need to authenticate simply to view someone's Youniverse.
 
-The public Youniverse is the person's:
-
-- public presence
-- front door
-- personal internet space
-- projects/showcase
-- publicly shared applications
+**What is the Public Side?**
+The public Youniverse is the person's curated digital footprint. It is the read-only manifestation of their digital territory, acting as their:
+- public presence and front door
+- portfolio or interactive showcase
+- publicly shared applications (e.g., a public blog or a shared tool)
 - publicly exposed information
 
-Public visibility does not grant operating authority.
+**How is the Public Side Determined?**
+The public side is entirely determined by the Owner from within their private Operating Environment (Portals OS). 
+- **Default Private**: The underlying architecture assumes all assets, files, agents, and configurations are private by default.
+- **Explicit Publishing**: The Owner must explicitly publish or toggle assets to "Public". They may use their Nexus agents or direct configuration tools to curate exactly what appears on their public domain.
+- **Curation vs. Access**: The public side is not just a dump of files; it is a designed presentation layer sculpted by the Owner.
 
-A visitor seeing a Youniverse is not equivalent to entering the owner's operating environment.
+**How is the Public Side Viewed?**
+- **Navigation**: Visitors arrive by navigating directly to `<handle>.itsyouonline.com`.
+- **Identity Resolution**: The system checks for an active owner session. If no session is found, or the session does not match the requested handle, the system triggers the Public Mode.
+- **Presentation Layer**: The visitor does not see Portals OS. They do not see the Desktop, the Window Manager, the Sidebar, or the system tray. Instead, they see a seamless, tailored presentation layer (e.g., a `PublicYouniverse` rendering engine) that displays the owner's public assets and public-facing applications without any administrative chrome.
+- **No Authority**: Public visibility grants zero operating authority. A visitor seeing a Youniverse is merely standing on the front lawn; they cannot enter the house.
 
 ---
 
