@@ -13,6 +13,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import SubdomainAvailability from "./SubdomainAvailability";
 import { normalizeHandle, isValidHandle } from "../../types/onboarding";
+import { checkHandleAvailability } from "../../services/identityService";
 
 interface AtLineGatewayProps {
   onClaim: (handle: string, email: string) => void;
@@ -43,14 +44,30 @@ const AtLineGateway: React.FC<AtLineGatewayProps> = ({ onClaim, isLoading = fals
 
   // ── HANDLERS ──
 
-  const onHandleKeyDown = (e: React.KeyboardEvent) => {
+  const onHandleKeyDown = async (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
       const normalized = normalizeHandle(handleInput);
       if (normalized && isValidHandle(normalized)) {
         setHandleInput(normalized);
         setHandleLocked(true);
-        setShowEmailField(true);
+        
+        // Check if it's already taken
+        const result = await checkHandleAvailability(normalized);
+        
+        if (result.status === "taken") {
+          // ── DIRECT ROUTING LOGIC ──
+          // If taken, they aren't claiming it — warp them straight to it!
+          const currentHost = window.location.hostname;
+          if (currentHost === "localhost" || currentHost === "127.0.0.1" || currentHost.includes("vercel.app")) {
+            window.location.href = `/?@=${normalized}`;
+          } else {
+            window.location.href = `https://${normalized}.itsyouonline.com`;
+          }
+        } else {
+          // If available, proceed to email collection for claiming
+          setShowEmailField(true);
+        }
       }
     }
   };

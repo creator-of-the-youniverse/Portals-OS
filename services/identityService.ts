@@ -35,6 +35,15 @@ export async function checkHandleAvailability(
 ): Promise<AvailabilityResult> {
   const subdomain = `${handle}.itsyouonline.com`;
 
+  // ── MOCK BUSINESS LOGIC ──
+  const hardcodedTaken = ['trader', 'alice', 'bob'];
+  const claimedHandles = JSON.parse(localStorage.getItem('claimed_handles') || '[]');
+  
+  if (hardcodedTaken.includes(handle.toLowerCase()) || claimedHandles.includes(handle.toLowerCase())) {
+    return { status: "taken", handle, subdomain };
+  }
+  // ─────────────────────────
+
   try {
     const res = await fetch(
       `${API_BASE}/availability?handle=${encodeURIComponent(handle)}`
@@ -87,6 +96,11 @@ export async function claimHandle(
   // Record this email as having claimed its free Youniverse
   claimedEmails.push(payload.email.toLowerCase());
   localStorage.setItem('claimed_emails', JSON.stringify(claimedEmails));
+  
+  // Record the handle as taken
+  const claimedHandles = JSON.parse(localStorage.getItem('claimed_handles') || '[]');
+  claimedHandles.push(payload.handle.toLowerCase());
+  localStorage.setItem('claimed_handles', JSON.stringify(claimedHandles));
   // ────────────────────────────────────────────────────────
 
   try {

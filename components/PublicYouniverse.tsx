@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import PortalLayout from "./PortalLayout";
 import { useYouniverse } from "./YouniverseProvider";
-import { Rocket, ShieldCheck, Sparkles, ExternalLink, ArrowRight, Layers, Cpu, Radio, Volume2, VolumeX } from "lucide-react";
+import { Rocket, ShieldCheck, Sparkles, ExternalLink, ArrowRight, Layers, Cpu, Radio, Volume2, VolumeX, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useClubRadio } from "../contexts/ClubRadioContext";
 
@@ -29,12 +29,24 @@ const MiniWave: React.FC<{ isPlaying: boolean }> = ({ isPlaying }) => (
 const PublicYouniverse: React.FC<PublicYouniverseProps> = ({ onEnterOs }) => {
   const { identity } = useYouniverse();
   const radio = useClubRadio();
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
   if (!identity || identity.kind !== "identity" || !identity.username) {
     return null;
   }
 
+  // Check if current browser session is authenticated as the owner
+  const isOwner = 
+    localStorage.getItem('active_youniverse_handle') === identity.username && 
+    !!localStorage.getItem('youniverse_session_token');
+
   const handleEnterOs = () => {
+    if (!isOwner) {
+      // Deny access and show auth prompt
+      setShowAuthPrompt(true);
+      return;
+    }
+
     if (onEnterOs) {
       onEnterOs();
     } else {
@@ -142,23 +154,50 @@ const PublicYouniverse: React.FC<PublicYouniverseProps> = ({ onEnterOs }) => {
           </AnimatePresence>
 
           {/* Primary CTA: Launch / Enter Portals OS */}
-          <div className="mt-8 flex w-full flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              onClick={handleEnterOs}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-500 px-7 py-3 text-sm font-semibold text-white shadow-[0_0_30px_rgba(168,85,247,0.35)] transition-all hover:scale-105 active:scale-95 hover:shadow-[0_0_40px_rgba(0,255,255,0.5)]"
-            >
-              <Rocket className="h-4 w-4" />
-              <span>Enter Portals OS</span>
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </button>
+          <div className="mt-8 flex w-full flex-col items-center justify-center gap-3">
+            <div className="flex w-full flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={handleEnterOs}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-500 px-7 py-3 text-sm font-semibold text-white shadow-[0_0_30px_rgba(168,85,247,0.35)] transition-all hover:scale-105 active:scale-95 hover:shadow-[0_0_40px_rgba(0,255,255,0.5)]"
+              >
+                {isOwner ? <Rocket className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                <span>{isOwner ? "Enter Portals OS" : "Owner Login"}</span>
+                {isOwner && <ArrowRight className="h-4 w-4 ml-1" />}
+              </button>
 
-            <a
-              href="https://itsyouonline.com"
-              className="w-full sm:w-auto flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              <span>Gateway Hub</span>
-              <ExternalLink className="h-3.5 w-3.5 text-white/50" />
-            </a>
+              <a
+                href="https://itsyouonline.com"
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <span>Gateway Hub</span>
+                <ExternalLink className="h-3.5 w-3.5 text-white/50" />
+              </a>
+            </div>
+
+            {/* Auth Prompt for unauthenticated visitors */}
+            <AnimatePresence>
+              {showAuthPrompt && !isOwner && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="w-full overflow-hidden mt-2"
+                >
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center backdrop-blur-md">
+                    <p className="text-sm text-red-200 font-medium">Access Denied</p>
+                    <p className="text-xs text-red-200/70 mt-1">
+                      You are viewing the public lawn. Only the authenticated owner can enter the Portals OS environment for @{identity.username}.
+                    </p>
+                    <button 
+                      onClick={() => setShowAuthPrompt(false)}
+                      className="mt-3 text-[10px] uppercase tracking-widest text-red-300 hover:text-red-100 transition-colors"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Feature Overview Strip */}
