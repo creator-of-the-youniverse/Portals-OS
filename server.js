@@ -357,6 +357,115 @@ app.post("/api/gemini:generate", async (req, res) => {
   }
 });
 
+// ============================================================================
+// FIRST-TOUCH ONBOARDING — AUTH ENDPOINTS
+// ============================================================================
+
+// In-memory provisional tenant store (swap to Supabase/Neon for production)
+const provisionalTenants = new Map();
+
+// POST /api/v1/auth/claim — Create provisional tenant
+app.post("/api/v1/auth/claim", (req, res) => {
+  const { handle, email } = req.body;
+
+  if (!handle || !email) {
+    return res.status(400).json({ success: false, error: "Handle and email are required" });
+  }
+
+  // Validate handle format
+  const handleRegex = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
+  if (!handleRegex.test(handle)) {
+    return res.status(400).json({ success: false, error: "Invalid handle format" });
+  }
+
+  // Check if already claimed
+  if (provisionalTenants.has(handle)) {
+    const existing = provisionalTenants.get(handle);
+    if (existing.isVerified && existing.ownerEmail !== email) {
+      return res.status(409).json({ success: false, error: "Handle already claimed" });
+    }
+  }
+
+  // Create provisional tenant record
+  const sessionToken = `prov_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  const tenant = {
+    id: `tn_${Math.random().toString(36).substring(2, 15)}`,
+    handle,
+    subdomain: `${handle}.itsyouonline.com`,
+    ownerEmail: email,
+    isVerified: false,
+    role: "PROVISIONAL_OWNER",
+    sessionToken,
+    createdAt: new Date().toISOString(),
+    verifiedAt: null,
+  };
+
+  provisionalTenants.set(handle, tenant);
+
+  // In production: fire magic-link verification email here
+  console.log(`[AUTH] Provisional tenant created: @${handle} (${email})`);
+  console.log(`[AUTH] Verification link would be: /api/v1/auth/verify?token=${sessionToken}`);
+
+  res.json({
+    success: true,
+    subdomain: tenant.subdomain,
+    sessionToken,
+  });
+});
+
+// GET /api/v1/auth/verify — Verify email via magic link token
+app.get("/api/v1/auth/verify", (req, res) => {
+  const { token } = req.query;
+
+  if (!token) {
+    return res.status(400).json({ success: false, error: "Token is required" });
+  }
+
+  // Find tenant by session token
+  let foundTenant = null;
+  for (const [, tenant] of provisionalTenants) {
+    if (tenant.sessionToken === token) {
+      foundTenant = tenant;
+      break;
+    }
+  }
+
+  if (!foundTenant) {
+    return res.status(404).json({ success: false, error: "Invalid or expired token" });
+  }
+
+  // Upgrade to authenticated owner
+  foundTenant.isVerified = true;
+  foundTenant.role = "AUTHENTICATED_OWNER";
+  foundTenant.verifiedAt = new Date().toISOString();
+
+  console.log(`[AUTH] Email verified: @${foundTenant.handle} upgraded to AUTHENTICATED_OWNER`);
+
+  res.json({
+    success: true,
+    handle: foundTenant.handle,
+    role: "AUTHENTICATED_OWNER",
+  });
+});
+
+// GET /api/v1/auth/availability — Check handle availability
+app.get("/api/v1/auth/availability", (req, res) => {
+  const { handle } = req.query;
+
+  if (!handle) {
+    return res.status(400).json({ available: false, error: "Handle is required" });
+  }
+
+  const existing = provisionalTenants.get(handle);
+  const isAvailable = !existing || (!existing.isVerified);
+
+  res.json({
+    available: isAvailable,
+    handle,
+    subdomain: `${handle}.itsyouonline.com`,
+  });
+});
+
 // Serve the React app for any non-API routes
 app.use((req, res, next) => {
   if (req.path.startsWith("/api")) return next();

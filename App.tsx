@@ -19,12 +19,21 @@ import {
   performanceMonitor,
   PerformanceMetrics,
 } from "./lib/performanceUtils";
+import { playRandomWelcomeMessage } from "./lib/audioUtils";
 
 import { motion, AnimatePresence } from "framer-motion";
 import { Analytics } from "@vercel/analytics/react";
 import { PwaInstallPrompt } from "./components/PwaInstallPrompt";
 import { ClubRadioProvider } from "./contexts/ClubRadioContext";
 import YouuniverseRadioBar from "./components/YouuniverseRadioBar";
+
+// First-Touch Onboarding System
+import AtLineGateway from "./components/gateway/AtLineGateway";
+import OnboardingFlow from "./components/onboarding/OnboardingFlow";
+import VerificationBanner from "./components/onboarding/VerificationBanner";
+import { PortalBackdrop } from "./components/PortalBackdrop";
+import { claimHandle } from "./services/identityService";
+import { normalizeHandle } from "./types/onboarding";
 
 const App: React.FC = () => {
   const windows = useKernel((state) => state.windows);
@@ -170,10 +179,98 @@ const App: React.FC = () => {
     return () => window.removeEventListener("message", handleMessage);
   }, [addDeliverable, setAgentStatus]);
 
+  // ────────────────────────────────────────────────────────────
+  // FIRST-TOUCH ONBOARDING STATE
+  // ────────────────────────────────────────────────────────────
+  const onboarding = useKernel((state) => state.onboarding);
+  const setOnboardingPhase = useKernel((state) => state.setOnboardingPhase);
+  const setOnboardingHandle = useKernel((state) => state.setOnboardingHandle);
+  const setOnboardingEmail = useKernel((state) => state.setOnboardingEmail);
+  const setOwnerRole = useKernel((state) => state.setOwnerRole);
+  const startOnboardingDialogue = useKernel((state) => state.startOnboardingDialogue);
+  const completeOnboardingDialogue = useKernel((state) => state.completeOnboardingDialogue);
+  const upgradeToVerified = useKernel((state) => state.upgradeToVerified);
+  const [isClaimLoading, setIsClaimLoading] = useState(false);
 
+  // Handle gateway claim submission
+  const handleGatewayClaim = useCallback(async (handle: string, email: string) => {
+    setIsClaimLoading(true);
+    setOnboardingHandle(handle);
+    setOnboardingEmail(email);
+    setOnboardingPhase('CLAIMING');
+
+    try {
+      const result = await claimHandle({ handle, email });
+
+      if (result.success) {
+        // Store session locally
+        localStorage.setItem('active_youniverse_handle', handle);
+        localStorage.setItem('youniverse_session_token', result.sessionToken);
+        localStorage.setItem('youniverse_owner_email', email);
+
+        // Transition to portal animation then dialogue
+        setOwnerRole('PROVISIONAL_OWNER');
+        setOnboardingPhase('PORTAL_TRANSITION');
+        playRandomWelcomeMessage();
+
+        // Brief portal transition animation, then start dialogue
+        setTimeout(() => {
+          startOnboardingDialogue();
+          // Also mark hasWelcomed so the old WelcomeScreen doesn't interfere
+          setHasWelcomed(true);
+        }, 1500);
+      } else if (result.error === 'payment_required') {
+        // Email has already claimed a free Youniverse — redirect to Pay Screen
+        setIsClaimLoading(false);
+        window.location.href = `/?claim=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}`;
+        return;
+      }
+    } catch (e) {
+      console.warn('[ONBOARDING] Claim error, proceeding anyway:', e);
+      setOwnerRole('PROVISIONAL_OWNER');
+      playRandomWelcomeMessage();
+      startOnboardingDialogue();
+      setHasWelcomed(true);
+    } finally {
+      setIsClaimLoading(false);
+    }
+  }, [setOnboardingHandle, setOnboardingEmail, setOnboardingPhase, setOwnerRole, startOnboardingDialogue, setHasWelcomed]);
+
+  // Handle onboarding dialogue completion
+  const handleOnboardingComplete = useCallback(() => {
+    completeOnboardingDialogue();
+  }, [completeOnboardingDialogue]);
+
+  // Check for verification token in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const verifyToken = params.get('verify_token');
+    if (verifyToken) {
+      import('./services/identityService').then(({ verifyEmail }) => {
+        verifyEmail(verifyToken).then((result) => {
+          if (result.success) {
+            upgradeToVerified();
+            // Clean the URL
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        });
+      });
+    }
+  }, [upgradeToVerified]);
+
+  // ────────────────────────────────────────────────────────────
+  // ROUTING LOGIC
+  // ────────────────────────────────────────────────────────────
   const showClaimRoute = isClaimRoute;
   const showPublicYouniverse = isYouniverseRoute && !subdomainOsActive;
   const showWelcome = !isYouniverseRoute && !isClaimRoute && !hasWelcomed;
+
+  // First-Touch Onboarding overrides
+  const showGateway = showWelcome && onboarding.phase === 'GATEWAY';
+  const showPortalTransition = onboarding.phase === 'PORTAL_TRANSITION';
+  const showOnboardingDialogue = onboarding.phase === 'DIALOGUE';
+  const showProvisionalDesktop = onboarding.phase === 'EXPLORING' || onboarding.phase === 'VERIFIED';
+  const isProvisionalOwner = onboarding.ownerRole === 'PROVISIONAL_OWNER' && !onboarding.isVerified;
 
   return (
     <ClubRadioProvider>
@@ -182,6 +279,79 @@ const App: React.FC = () => {
         <ClaimYouniverse key="claim" />
       ) : showPublicYouniverse ? (
         <PublicYouniverse key="youniverse" onEnterOs={enterSubdomainOs} />
+      ) : showGateway || showPortalTransition || showOnboardingDialogue ? (
+        /* ── FIRST-TOUCH ONBOARDING WRAPPED IN PORTAL ── */
+        <PortalBackdrop key="onboarding-portal">
+          <AnimatePresence mode="wait">
+            {showGateway && (
+              <motion.div
+                key="gateway"
+                className="w-full flex flex-col items-center justify-center"
+                exit={{ opacity: 0, scale: 1.05 }}
+                transition={{ duration: 0.8, ease: "easeInOut" }}
+              >
+                <AtLineGateway
+                  onClaim={handleGatewayClaim}
+                  isLoading={isClaimLoading}
+                />
+                {/* Brand watermark */}
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.15 }}
+                  transition={{ delay: 2, duration: 2 }}
+                  className="absolute bottom-8 text-[10px] text-white font-mono tracking-[0.3em] uppercase"
+                >
+                  The Youniverse · ItsYouOnline.com
+                </motion.p>
+              </motion.div>
+            )}
+
+            {showPortalTransition && (
+              <motion.div
+                key="portal-transition"
+                initial={{ opacity: 1 }}
+                animate={{ opacity: 0 }}
+                transition={{ duration: 1.5, ease: "easeInOut" }}
+                className="w-full flex flex-col items-center justify-center"
+              >
+                <motion.div
+                  initial={{ scale: 1, opacity: 1 }}
+                  animate={{ scale: 1.3, opacity: 0 }}
+                  transition={{ duration: 1.5, ease: "easeIn" }}
+                  className="text-center"
+                >
+                  <p className="text-white/60 font-mono text-sm tracking-widest">
+                    @{onboarding.handle}
+                  </p>
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3, duration: 0.6 }}
+                    className="text-cyan-400/80 font-mono text-xs tracking-wider mt-1"
+                  >
+                    {onboarding.handle}.itsyouonline.com
+                  </motion.p>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {showOnboardingDialogue && (
+              <motion.div
+                key="onboarding-dialogue"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.8 }}
+                className="w-full flex flex-col items-center justify-center relative z-20"
+              >
+                <OnboardingFlow
+                  handle={onboarding.handle}
+                  email={onboarding.email}
+                  onComplete={handleOnboardingComplete}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </PortalBackdrop>
       ) : showWelcome ? (
         <WelcomeScreen key="welcome" />
       ) : (
@@ -192,6 +362,15 @@ const App: React.FC = () => {
           transition={{ duration: 1.5 }}
           className="fixed inset-0 overflow-hidden bg-black font-sans"
         >
+          {/* Verification Banner for provisional owners */}
+          {isProvisionalOwner && (
+            <VerificationBanner
+              email={onboarding.email}
+              handle={onboarding.handle}
+              isVerified={onboarding.isVerified}
+            />
+          )}
+
           <Desktop>
             {windows.map((win) => {
               const allApps = getAllApps(projectFolders);

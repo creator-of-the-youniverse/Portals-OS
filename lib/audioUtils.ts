@@ -22,3 +22,9 @@ export const playAudio = (src: string, sampleRate?: number, volume: number = 0.5
         audio.load();
     });
 };
+
+export const playRandomWelcomeMessage = () => {
+  const welcomeAudios = Array.from({ length: 25 }, (_, i) => `/assets/audio/welcome_${i + 1}.mp3`);
+  const randomAudio = welcomeAudios[Math.floor(Math.random() * welcomeAudios.length)];
+  playAudio(randomAudio, undefined, 0.3); // Set volume to 30%
+};

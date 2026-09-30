@@ -12,6 +12,11 @@ import {
   Theme,
 } from "../types";
 import { NEXUS_AGENTS } from "../constants/platoon";
+import type {
+  OnboardingPhase,
+  OnboardingAct,
+  OwnerRole,
+} from "../types/onboarding";
 
 const useKernelStore = create<KernelState>()(
   persist(
@@ -51,6 +56,20 @@ const useKernelStore = create<KernelState>()(
         projects: {},
         currentProjectId: null,
         pendingDeliverables: [],
+      },
+
+      // First-Touch Onboarding State
+      onboarding: {
+        phase: 'GATEWAY' as OnboardingPhase,
+        currentAct: null as OnboardingAct | null,
+        actIndex: 0,
+        handle: '',
+        email: '',
+        ownerRole: 'PUBLIC' as OwnerRole,
+        isVerified: false,
+        dialogueComplete: false,
+        hasExploredFileTree: false,
+        hasTestedWeaver: false,
       },
 
       // Access Control
@@ -413,6 +432,74 @@ const useKernelStore = create<KernelState>()(
           collectedEmails: [...state.collectedEmails, email],
         })),
       setRadioWidgetVisible: (status) => set({ isRadioWidgetVisible: status }),
+
+      // ────────────────────────────────────────────────────────
+      // First-Touch Onboarding Actions
+      // ────────────────────────────────────────────────────────
+      setOnboardingPhase: (phase) =>
+        set((state) => ({
+          onboarding: { ...state.onboarding, phase },
+        })),
+      setOnboardingHandle: (handle) =>
+        set((state) => ({
+          onboarding: { ...state.onboarding, handle },
+        })),
+      setOnboardingEmail: (email) =>
+        set((state) => ({
+          onboarding: { ...state.onboarding, email },
+        })),
+      setOwnerRole: (role) =>
+        set((state) => ({
+          onboarding: { ...state.onboarding, ownerRole: role },
+        })),
+      advanceOnboardingAct: () =>
+        set((state) => {
+          const acts = ['WELCOME_ATOM', 'WEAVER_INTRO', 'ORACLE_NEXUS', 'ECOSYSTEM_HUBS'] as const;
+          const nextIndex = state.onboarding.actIndex + 1;
+          if (nextIndex >= acts.length) {
+            return {
+              onboarding: {
+                ...state.onboarding,
+                dialogueComplete: true,
+                currentAct: null,
+                actIndex: nextIndex,
+              },
+            };
+          }
+          return {
+            onboarding: {
+              ...state.onboarding,
+              currentAct: acts[nextIndex],
+              actIndex: nextIndex,
+            },
+          };
+        }),
+      startOnboardingDialogue: () =>
+        set((state) => ({
+          onboarding: {
+            ...state.onboarding,
+            phase: 'DIALOGUE',
+            currentAct: 'WELCOME_ATOM',
+            actIndex: 0,
+          },
+        })),
+      completeOnboardingDialogue: () =>
+        set((state) => ({
+          onboarding: {
+            ...state.onboarding,
+            dialogueComplete: true,
+            phase: 'EXPLORING',
+          },
+        })),
+      upgradeToVerified: () =>
+        set((state) => ({
+          onboarding: {
+            ...state.onboarding,
+            ownerRole: 'AUTHENTICATED_OWNER',
+            isVerified: true,
+            phase: 'VERIFIED',
+          },
+        })),
       toggleSidebar: () =>
         set((state) => ({
           isSidebarOpen: !state.isSidebarOpen,

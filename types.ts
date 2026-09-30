@@ -13,6 +13,13 @@ import {
   ProjectFolder,
 } from "./src/types";
 
+import type {
+  OnboardingPhase,
+  OnboardingAct,
+  OwnerRole,
+  OnboardingState,
+} from "./types/onboarding";
+
 export type {
   AppId,
   BuiltInAppId,
@@ -200,6 +207,17 @@ export interface KernelState {
     location: { tower: string; shelf: string; book: string; page: string },
     summary: string
   ) => Promise<boolean>;
+
+  // First-Touch Onboarding
+  onboarding: OnboardingState;
+  setOnboardingPhase: (phase: OnboardingPhase) => void;
+  setOnboardingHandle: (handle: string) => void;
+  setOnboardingEmail: (email: string) => void;
+  setOwnerRole: (role: OwnerRole) => void;
+  advanceOnboardingAct: () => void;
+  startOnboardingDialogue: () => void;
+  completeOnboardingDialogue: () => void;
+  upgradeToVerified: () => void;
 }
 
 export interface NotNotesDeliverable {
