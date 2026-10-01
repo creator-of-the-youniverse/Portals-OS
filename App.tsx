@@ -42,6 +42,7 @@ const App: React.FC = () => {
   const isYouniverseRoute = identity?.kind === "identity";
   const setHasWelcomed = useKernel((state) => state.setHasWelcomed);
   const projectFolders = useKernel((state) => state.projectFolders);
+  const weavedWidgets = useKernel((state) => state.weavedWidgets);
 
   const isClaimRoute = identity?.kind === "claim";
 
@@ -58,6 +59,31 @@ const App: React.FC = () => {
       }
     }
   }, [identity?.username]);
+
+  // Load custom sovereign widgets from NotNotes when OS boots
+  useEffect(() => {
+    if (subdomainOsActive) {
+      const fetchWidgets = async () => {
+        try {
+          const token = localStorage.getItem("youniverse_session_token") || localStorage.getItem("weaver_jwt");
+          if (!token) return;
+
+          const response = await fetch("/api/not-notes/widgets", {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          const data = await response.json();
+          if (data.success && data.widgets) {
+            useKernel.getState().setWeavedWidgets(data.widgets);
+          }
+        } catch (error) {
+          console.error("Failed to fetch sovereign widgets:", error);
+        }
+      };
+      fetchWidgets();
+    }
+  }, [subdomainOsActive]);
 
   const enterSubdomainOs = useCallback(() => {
     setSubdomainOsActive(true);
@@ -373,7 +399,7 @@ const App: React.FC = () => {
 
           <Desktop>
             {windows.map((win) => {
-              const allApps = getAllApps(projectFolders);
+              const allApps = getAllApps(projectFolders, weavedWidgets);
               const appDef = allApps.find((app) => app.id === win.appId);
               const App = appDef?.component;
               if (!App) return null;

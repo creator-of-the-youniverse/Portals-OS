@@ -34,7 +34,7 @@ function buildDialogueScript(handle: string): Record<OnboardingAct, DialogueLine
       {
         id: "a2",
         speaker: "ATOM",
-        text: "I'm Atom. Consider me your first friend here — the one connection already pinned to your list the second you claim your domain, just like Tom back in the day.",
+        text: "I'm Atom. Consider me your first friend here — the one connection already pinned to your list the second you claim your domain, just like Tom back in the old space.",
         delay: 2200,
         duration: 2200,
       },
@@ -89,7 +89,7 @@ function buildDialogueScript(handle: string): Record<OnboardingAct, DialogueLine
       {
         id: "o4",
         speaker: "ORACLE",
-        text: "Once diagnosed, I deploy my fleet: the Nexus. These are independent, sovereign agents living on their own dedicated domains. They don't just chat — they execute. They write the copy, structure the legal rails, configure checkout funnels, and deliver working assets.",
+        text: "Once diagnosed, I deploy my fleet: the Nexus, a fleet of 167 specialized agents (and growing). These are independent, sovereign agents living on their own dedicated domains. They don't just chat — they execute. They write the copy, structure the legal rails, configure checkout funnels; they deliver working assets.",
         delay: 9000,
         duration: 3200,
       },
@@ -127,14 +127,14 @@ function buildDialogueScript(handle: string): Record<OnboardingAct, DialogueLine
       {
         id: "e5",
         speaker: "ATOM",
-        text: "Omnedia: The global social hub. It bridges your external social metrics into one unified sovereign score so you can monitor your digital footprint across the globe.",
+        text: "Omnedia: The global social hub. It bridges all of your external social metrics into one unified sovereign score so you can monitor your digital footprint across the globe.",
         delay: 10400,
         duration: 2200,
       },
       {
         id: "e6",
         speaker: "ATOM",
-        text: "You're looking at your unverified sovereign space right now. Feel free to explore the file tree, test Weaver's themes, or inspect the system.",
+        text: "You're looking at your unverified sovereign space right now. Feel free to explore the file tree, test Weaver, or inspect the system however. It's your Youniverse.",
         delay: 13400,
         duration: 1800,
       },
@@ -208,13 +208,12 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ handle, email, onComple
         {ACTS.map((act, i) => (
           <div
             key={act}
-            className={`h-1.5 rounded-full transition-all duration-500 ${
-              i < actIndex
+            className={`h-1.5 rounded-full transition-all duration-500 ${i < actIndex
                 ? "w-6 bg-cyan-400/60"
                 : i === actIndex
-                ? "w-8 bg-white/80"
-                : "w-4 bg-white/15"
-            }`}
+                  ? "w-8 bg-white/80"
+                  : "w-4 bg-white/15"
+              }`}
           />
         ))}
       </div>

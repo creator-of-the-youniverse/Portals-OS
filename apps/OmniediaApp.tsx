@@ -6,10 +6,10 @@ import { useYouniverse } from "../components/YouniverseProvider";
 const OmniediaApp: React.FC<AppProps> = () => {
   return (
     <div className="flex h-full w-full flex-col bg-black">
-      <iframe 
+      <iframe
         src="https://omnedia.itsyouonline.com"
         className="w-full h-full border-none"
-        title="Omniedia Global Score"
+        title="Omniedia - Global Social Media Score"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
       />

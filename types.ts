@@ -35,6 +35,13 @@ export type {
   ProjectFolder,
 };
 
+export interface WeavedWidget {
+  id: string;
+  title: string;
+  code: string;
+  dependencies: string[];
+}
+
 export interface KernelState {
   windows: WindowInstance[];
   activeWindowId: string | null;
@@ -95,6 +102,8 @@ export interface KernelState {
   isRadioWidgetVisible: boolean;
   currentPath: string; // Current directory in virtual filesystem
   projectFolders: ProjectFolder[]; // User's project folder bookmarks
+  weavedWidgets: WeavedWidget[]; // User's dynamically loaded Weaver applets
+  setWeavedWidgets: (widgets: WeavedWidget[]) => void;
 
   setInitialGreetingSpoken: (status: boolean) => void;
   setMicPermissionGranted: (status: boolean) => void;

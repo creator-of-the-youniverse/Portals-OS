@@ -50,6 +50,8 @@ const useKernelStore = create<KernelState>()(
       isMobile: typeof window !== 'undefined' ? window.innerWidth < 768 : false,
       projectFolders: [], // User's project folder bookmarks
       currentPath: "/", // Current directory in virtual filesystem
+      weavedWidgets: [], // User's dynamically loaded Weaver applets
+      setWeavedWidgets: (widgets) => set({ weavedWidgets: widgets }),
       
       // Not Notes Initial State
       notNotes: {

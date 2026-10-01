@@ -1,6 +1,6 @@
 import React, { lazy } from "react";
-import { AppId, BuiltInAppId, AppDefinition, ProjectFolder } from "./types";
-import { FileText, Folder, FolderOpen, Sparkles, Radio, Globe } from "lucide-react";
+import { AppId, BuiltInAppId, AppDefinition, ProjectFolder, WeavedWidget } from "./types";
+import { FileText, Folder, FolderOpen, Sparkles, Radio, Globe, Code } from "lucide-react";
 import {
   TerminalIcon,
   ContactIcon,
@@ -150,7 +150,8 @@ const CORE_APP_IDS: BuiltInAppId[] = [
  * Get core system apps for the start menu
  */
 export const getCoreApps = (
-  projectFolders: ProjectFolder[]
+  projectFolders: ProjectFolder[],
+  weavedWidgets: WeavedWidget[] = []
 ): AppDefinition[] => {
   const coreApps = CORE_APP_IDS.map((id) => APPS_CONFIG[id]);
 
@@ -163,16 +164,30 @@ export const getCoreApps = (
     isCustom: true,
   }));
 
-  return [...coreApps, ...folderApps];
+  const customWidgets: AppDefinition[] = weavedWidgets.map((widget) => ({
+    id: widget.id as AppId,
+    name: widget.title,
+    icon: Code,
+    component: lazy(() => import("./apps/WeavedWidgetApp")),
+    description: "Sovereign Applet created by Weaver",
+    metadata: {
+      code: widget.code,
+      componentName: widget.title,
+    },
+    isCustom: true,
+  }));
+
+  return [...coreApps, ...folderApps, ...customWidgets];
 };
 
 /**
  * Get all apps — includes core apps, folder apps, AND dynamically resolved Nexus agents
  */
 export const getAllApps = (
-  projectFolders: ProjectFolder[]
+  projectFolders: ProjectFolder[],
+  weavedWidgets: WeavedWidget[] = []
 ): AppDefinition[] => {
-  const coreAndFolders = getCoreApps(projectFolders);
+  const coreAndFolders = getCoreApps(projectFolders, weavedWidgets);
 
   // Dynamically include any Nexus agent that has an open window
   // This is called per-render in App.tsx so we generate AppDefinitions on the fly

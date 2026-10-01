@@ -5,6 +5,10 @@ import { fileURLToPath } from "url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
+import rateLimit from "express-rate-limit";
+import { verifyJwt } from "./middleware/verifyJwt.js";
+import { weaverGenerateHandler } from "./controllers/weaverController.js";
+import { saveWeaverArtifactHandler, getWeavedWidgetsHandler } from "./controllers/notNotesController.js";
 
 dotenv.config();
 
@@ -506,6 +510,66 @@ app.get("/api/v1/auth/availability", async (req, res) => {
     res.json({ available: true, handle, subdomain: `${handle}.itsyouonline.com` });
   }
 });
+
+// ============================================================================
+// WEAVER — AI COMPONENT GENERATION ENGINE
+// POST /api/weaver/generate
+// ============================================================================
+
+/**
+ * Rate limiter scoped exclusively to the Weaver endpoint.
+ *
+ * Limits:
+ *   - 10 requests per 10-minute window per IP.
+ *   - Responds with 429 and a Retry-After header on breach.
+ *
+ * This is a hard budget guard in addition to the JWT auth layer.
+ * Adjust WEAVER_RATE_LIMIT_MAX / WEAVER_RATE_LIMIT_WINDOW_MS in .env
+ * to tune without a code deploy.
+ */
+const weaverRateLimiter = rateLimit({
+  windowMs: parseInt(process.env.WEAVER_RATE_LIMIT_WINDOW_MS ?? "600000", 10), // 10 min
+  max: parseInt(process.env.WEAVER_RATE_LIMIT_MAX ?? "10", 10),
+  standardHeaders: true,   // Return rate-limit headers (RateLimit-*)
+  legacyHeaders: false,     // Disable X-RateLimit-* legacy headers
+  keyGenerator: (req) => {
+    // Prefer the verified userId so the limit is per-user (not per-proxy IP).
+    return req.user?.userId ?? req.ip;
+  },
+  handler: (req, res) => {
+    console.warn(`[Weaver] Rate limit breached — key=${req.user?.userId ?? req.ip}`);
+    return res.status(429).json({
+      success: false,
+      error: "rate_limit_exceeded",
+      message: "Too many generation requests. Please wait before trying again.",
+    });
+  },
+});
+
+// Note: verifyJwt runs BEFORE weaverRateLimiter so the keyGenerator
+// can use req.user.userId for per-user bucketing.
+app.post(
+  "/api/weaver/generate",
+  verifyJwt,
+  weaverRateLimiter,
+  weaverGenerateHandler
+);
+
+// ============================================================================
+// NOTNOTES — ARTIFACT PERSISTENCE
+// POST /api/not-notes/artifact
+// ============================================================================
+app.post(
+  "/api/not-notes/artifact",
+  verifyJwt,
+  saveWeaverArtifactHandler
+);
+
+app.get(
+  "/api/not-notes/widgets",
+  verifyJwt,
+  getWeavedWidgetsHandler
+);
 
 // Serve the React app for any non-API routes
 app.use((req, res, next) => {

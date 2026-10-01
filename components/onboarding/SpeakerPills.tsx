@@ -30,15 +30,15 @@ const SPEAKER_CONFIG: Record<DialogueSender, {
 }> = {
   ATOM: {
     label: "Atom",
-    subtitle: "ONE AI · First Friend",
+    subtitle: "ONE AI · First Friend Till The End",
     icon: (
       <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center -ml-1 -mt-1 pointer-events-none relative bg-black">
         <div className="absolute inset-[-100%]">
-          <FlowingLight 
-            lightIntensity={1.5} 
-            fogDensity={0.5} 
-            particleCount={40} 
-            lockTarget={{ x: 48, y: 48 }} 
+          <FlowingLight
+            lightIntensity={1.5}
+            fogDensity={0.5}
+            particleCount={40}
+            lockTarget={{ x: 48, y: 48 }}
           />
         </div>
       </div>

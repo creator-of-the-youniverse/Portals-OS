@@ -24,8 +24,12 @@ const StartMenuCircle: React.FC<StartMenuCircleProps> = ({
     onAppClick,
 }) => {
     const projectFolders = useKernel((state) => state.projectFolders);
-    // Get core apps but exclude oracle (handled separately)
-    const apps = getCoreApps(projectFolders).filter(app => app.id !== 'oracle').slice(0, 7);
+    const weavedWidgets = useKernel((state) => state.weavedWidgets);
+    
+    // Get core apps (and weaved widgets) but exclude oracle (handled separately)
+    const apps = getCoreApps(projectFolders, weavedWidgets)
+      .filter(app => app.id !== 'oracle')
+      .slice(0, 15); // Show more than just 7 if there are widgets
 
     // Calculate position for each icon in a semicircle quadrant
     const getIconPosition = (index: number, total: number) => {

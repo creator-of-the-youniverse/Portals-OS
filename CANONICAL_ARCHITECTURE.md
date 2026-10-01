@@ -2,10 +2,16 @@ CANONICAL ARCHITECTURE
 
 ITS YOU ONLINE / THE YOUNIVERSE
 
-Status: Canonical Product Architecture
-Version: 1.0
-Date: September 3, 2026
+Status: Canonical Product Architecture — Phase 5 Implemented
+Version: 1.5
+Date: September 30, 2026
 Authority: Current Product Vision
+
+Change Log:
+  v1.0 — September 3, 2026: Initial canonical document.
+  v1.5 — September 30, 2026: Added Phase 5 (Weaver-to-NotNotes Pipeline), WeaverSandbox
+          security model, Oracle tool manifest, two-tier app architecture, sovereign artifact
+          runtime model, backend persistence layer details, and public/owner gate audit.
 
 ---
 
@@ -496,6 +502,58 @@ ORACLE
 
 NEXUS
 «The engine of ascension» — Sovereign specialty agents orchestrating the user's journey from absolute zero to brand exit.
+
+---
+
+12.2 WEAVER IMPLEMENTATION (PHASE 5 — IMPLEMENTED)
+
+Weaver's current implementation consists of five integrated layers:
+
+  BACKEND (server.js + weaverController.js)
+  POST /api/weaver/generate
+  - Protected by verifyJwt middleware (JWT required).
+  - Rate-limited: 10 requests per 10-minute window per userId (env-configurable).
+  - Calls Gemini API with a strict responseSchema enforcing {name, code, dependencies}.
+  - Uses responseMimeType: "application/json" to guarantee structured output.
+  - System prompt is canonical in lib/weaverSystemPrompt.js.
+
+  WEAVER SYSTEM PROMPT (lib/weaverSystemPrompt.js)
+  - Persona: "Weaver, the spatial UI architect."
+  - Enforces: valid React functional components using only standard Tailwind CSS classes.
+  - Enforces: raw JSX in the `code` field — no markdown block formatting.
+  - Enforces: named exports only, no local imports.
+  - responseSchema: { name: STRING, code: STRING, dependencies: ARRAY<STRING> }
+
+  WEAVER STUDIO (components/weaver/WeaverStudio.tsx)
+  - Draggable, dark-mode, frosted-glass window (backdrop-blur-md bg-zinc-900/80).
+  - Textarea prompt input with Cmd/Ctrl+Enter shortcut.
+  - Pulsating loading spinner during active API calls.
+  - Split view: Preview Mode (WeaverSandbox iframe) | Code/Meta View (raw JSX + schema).
+  - Save button hits POST /api/not-notes/artifact with JWT in Authorization header.
+
+  WEAVER SANDBOX (components/weaver/WeaverSandbox.tsx)
+  - Renders dynamic JSX in a strictly isolated <iframe sandbox="allow-scripts">.
+  - Omits allow-same-origin intentionally — the iframe renders under an opaque origin.
+    This prevents any access to the parent window's localStorage, cookies, or DOM.
+  - Injects: Tailwind CDN, React 18 UMD, ReactDOM 18 UMD, @babel/standalone.
+  - Communication via postMessage only:
+      Parent → iframe: { type: 'RENDER_COMPONENT', payload: { code, componentName } }
+      iframe → Parent: { type: 'RENDER_SUCCESS' } | { type: 'RENDER_ERROR', payload: msg }
+  - Babel.transform() + ReactDOM.createRoot().render() wrapped in try/catch.
+  - Runtime errors surface as a human-readable rose-red overlay in WeaverStudio.
+  - Previous root is properly unmounted before each new render.
+
+  TWO-TIER APP ARCHITECTURE
+  Tier 1 — Core System Apps (Git / portals-os repo):
+    Built-in OS features: Oracle, NotNotes, Terminal, Weaver Studio, Settings, etc.
+    Only the platform admin (repo owner) can modify these.
+
+  Tier 2 — Sovereign Applets (User's Database — NotNotes):
+    Custom widgets synthesized by Weaver for a specific user's youniverseId.
+    Stored exclusively in PostgreSQL under that user's NotNote record.
+    Rendered at runtime via WeaverSandbox — no git commits required.
+    Registered dynamically into the OS window manager at boot via the Runtime Loader.
+
 ---
 
 13. NEXUS
@@ -600,6 +658,7 @@ NotNotes may contain:
 - synthesis
 - drafts
 - final artifacts
+- sovereign React widget applets (REACT_WIDGET type, synthesized by Weaver)
 
 The existing approval mechanism is conceptually valuable.
 
@@ -619,25 +678,66 @@ Approved material can then become part of the project artifact.
 
 NotNotes belongs to the user's Youniverse.
 
-It must eventually be identity-scoped.
+It is identity-scoped (IMPLEMENTED — Phase 5).
 
-The data model must not depend on:
+The data model is backed by PostgreSQL via Prisma, strictly keyed by youniverseId.
 
-- browser localStorage
-- a single device
-- a single browser
-- a single Portals installation
+The Prisma NotNote schema:
+  - id           UUID (PK)
+  - youniverseId UUID → Youniverse (FK, CASCADE DELETE)
+  - title        String
+  - content      Json  (flexible artifact payload)
+  - status       ArtifactState (PENDING | APPROVED | REJECTED | ARCHIVED_TO_BOOKS)
+  - createdAt    DateTime
+  - updatedAt    DateTime
 
-The eventual model is conceptually:
+For Weaver Sovereign Applets, the content shape is:
+  {
+    type: "REACT_WIDGET",
+    code: string,          // raw JSX
+    dependencies: string[] // declared npm deps (informational, not installed)
+  }
+
+All NotNotes API routes are protected by the verifyJwt middleware.
+
+Backend API surface (IMPLEMENTED):
+  POST /api/not-notes/artifact   — Save a Weaver-synthesized widget to the user's NotNotes.
+  GET  /api/not-notes/widgets    — Fetch all APPROVED REACT_WIDGET records for the session owner.
+
+---
+
+17.1 SOVEREIGN ARTIFACT RUNTIME MODEL (IMPLEMENTED — Phase 5)
+
+User-generated Weaver widgets are never committed to the core git repository.
+They belong exclusively in the user's NotNotes database record.
+
+Runtime Loader (App.tsx):
+  On OS boot (subdomainOsActive = true), App.tsx fetches GET /api/not-notes/widgets
+  using the stored session JWT and hydrates the Zustand kernel with the widget list.
+
+App Registration (apps.config.ts — getAllApps / getCoreApps):
+  Fetched widgets are dynamically mapped to AppDefinition entries.
+  Each widget launches via apps/WeavedWidgetApp.tsx, which delegates rendering
+  to WeaverSandbox. No static registration or git commit is required.
+
+Git Export / BYOT Model (Future):
+  If a sovereign user wants to push a widget to GitHub, this will be handled
+  via BYOT (Bring Your Own Token) OAuth — user connects their own GitHub account,
+  scoped tokens are ephemeral and session-bound, and commits target only the
+  user's own repository (<github-user>/youniverse-widgets).
+  The core portals-os repository is never touched.
+
+The eventual model is:
 
 YOUNIVERSE
    │
-   └── NOTNOTES
+   └── NOTNOTES (PostgreSQL)
         │
-        ├── Projects
-        ├── Working material
-        ├── Deliverables
-        └── Artifacts
+        ├── Projects (text / markdown artifacts)
+        ├── Working material (pending deliverables)
+        ├── Approved deliverables
+        ├── Final compiled artifacts
+        └── Sovereign Applets (REACT_WIDGET — rendered via WeaverSandbox)
 
 ---
 
@@ -961,20 +1061,23 @@ ONEAI remains the continuity layer throughout the user's broader journey.
 
 ---
 
-31. ONEAI / ORACLE / NEXUS / AGENT RESPONSIBILITY MATRIX
+31. ONEAI / ORACLE / NEXUS / WEAVER / AGENT RESPONSIBILITY MATRIX
 
-System| Primary Responsibility
-ItsYouOnline| Gateway, identity discovery, @ Line
-Youniverse| User's personal internet environment
-Portals OS| Owner operating interface
-ONEAI| Sovereign personal AI, continuity, memory, identity, device mobility
-Oracle| Diagnosis, reasoning, orchestration
-Nexus| Coordination of agents/workflows
-Sovereign Agent| Specialized problem solving
-NotNotes| Working memory
-Books OS| Long-term memory
-Backend| Identity, authorization, persistence, APIs
-AI Providers| Replaceable intelligence infrastructure
+System             | Primary Responsibility
+ItsYouOnline       | Gateway, identity discovery, @ Line
+Youniverse         | User's personal internet environment
+Portals OS         | Owner operating interface
+ONEAI (Atom)       | Sovereign personal AI, continuity, memory, identity, device mobility
+Oracle             | Diagnosis, reasoning, orchestration, tool-calling agent router
+Weaver             | Spatial builder, widget generator, environment architect
+Nexus              | Coordination of agents and structured progression workflows
+Sovereign Agent    | Independently addressable problem-solving entity (subdomain)
+NotNotes           | Working memory — identity-scoped in PostgreSQL
+Books OS           | Long-term memory (books.itsyouonline.com)
+Backend            | Identity, authorization, persistence, APIs (Express + Prisma + PostgreSQL)
+AI Providers       | Replaceable intelligence infrastructure (Gemini / Claude / LM Studio / local)
+WeaverSandbox      | Secure iframe runtime for user-synthesized React widgets
+WeavedWidgetApp    | Desktop container for Sovereign Applets loaded from NotNotes
 
 ---
 
@@ -1181,30 +1284,138 @@ AI providers are replaceable infrastructure.
 
 No individual application should silently become the owner of the entire ecosystem.
 
-39. IMPLEMENTATION ORDER
+39. IMPLEMENTATION STATUS (as of September 30, 2026)
 
-Architecture should be implemented in controlled stages.
+Phase 1 — Identity & Youniverse Routing                ✅ COMPLETE
+  - youniverseRouting.ts: pure hostname resolver
+  - youniverseIdentity.ts: identity kind (gateway | identity | claim)
+  - youniverseBootstrap.ts: deterministic, testable bootstrap
+  - YouniverseProvider: React context boundary
+  - Supports: itsyouonline.com, <handle>.itsyouonline.com,
+              claim.itsyouonline.com, localhost/?@=handle (dev)
 
-Recommended order:
+Phase 2 — Public Youniverse                           ✅ COMPLETE
+  - PublicYouniverse.tsx: public showcase view
+  - Owner check via localStorage session token (client-side)
+  - ⚠️ KNOWN GAP: Owner gate is localStorage-only — no server-side
+    session verification. A visitor can forge ownership by injecting
+    localStorage keys. Server-verified session check required.
 
-Identity and Youniverse routing
-Public Youniverse
-Authenticated Owner Mode
-Persistent backend and authorization
-Portals Owner Operating Environment integration
-ONEAI sovereign architecture
-Oracle separation
-Nexus / sovereign agent architecture
-NotNotes identity-scoped persistence
-Books OS integration
-AI provider abstraction
-Offline ONEAI
-Device trust / NFC
-Cross-device ONEAI synchronization
+Phase 3 — Authenticated Owner Mode                    ⚠️ PARTIAL
+  - AtLineGateway: @-handle claim UI
+  - OnboardingFlow / DialogueOverlay: first-touch dialogue
+  - Provisional session token issued by POST /api/v1/auth/claim
+  - JWT-based access for Weaver + NotNotes APIs (verifyJwt middleware)
+  - ⚠️ KNOWN GAP: JWT for Weaver is separate from the provisional
+    session token used by onboarding. A unified auth token strategy
+    (e.g., signing a proper JWT at claim-time, stored as weaver_jwt)
+    is required for consistent owner verification.
 
-The exact technology choices should be made after the current deployment and repository are fully mapped.
+Phase 4 — Persistent Backend & Authorization          ✅ COMPLETE
+  - PostgreSQL via Prisma (User, Youniverse, Session, NotNote, DeviceTrust)
+  - All Weaver + NotNotes API routes behind verifyJwt
+  - Rate limiting on /api/weaver/generate (env-configurable)
+  - One Free Youniverse rule enforced server-side
 
-40. FINAL ARCHITECTURAL STATEMENT
+Phase 5 — Weaver Sovereign Artifact & Runtime         ✅ COMPLETE
+  - POST /api/weaver/generate (JWT + rate-limited, Gemini schema-enforced)
+  - lib/weaverSystemPrompt.js (persona + responseSchema)
+  - WeaverStudio.tsx (draggable frosted-glass UI, split view, JWT save)
+  - WeaverSandbox.tsx (iframe sandbox, postMessage, runtime error reporting)
+  - POST /api/not-notes/artifact (save Weaver widget to DB)
+  - GET  /api/not-notes/widgets  (fetch user's approved widgets on boot)
+  - apps/WeavedWidgetApp.tsx (desktop container for sovereign applets)
+  - apps.config.ts: getCoreApps/getAllApps accept weavedWidgets array
+  - StartMenuCircle.tsx: shows sovereign applets alongside system apps
+  - App.tsx: fetches widgets on OS boot, hydrates Kernel store
+
+Phase 6 — Oracle Tool Enhancement                     ⚠️ PLANNED
+  - Add launchAgent(agentId) function call tool to open AgentPWA
+    windows with a specific Nexus agent context
+  - openWindow() in oracleService.ts currently checks static APPS
+    array — does not know about dynamically loaded sovereign widgets
+  - summarizeOracleHistory() and generateOracleTitle() are mock stubs
+    — require real LLM calls
+
+Phase 7 — ONEAI Sovereign Architecture                🔲 NOT STARTED
+Phase 8 — Nexus / Agent Architecture                  🔲 NOT STARTED
+Phase 9 — Books OS Integration                        🔲 NOT STARTED
+Phase 10 — AI Provider Abstraction Layer              🔲 NOT STARTED
+Phase 11 — Offline ONEAI                              🔲 NOT STARTED
+Phase 12 — Device Trust / NFC                         🔲 NOT STARTED
+Phase 13 — Cross-device ONEAI Sync                    🔲 NOT STARTED
+Phase 14 — GitHub BYOT Export Model                   🔲 NOT STARTED
+           (user connects own GitHub OAuth, scoped token, targets
+            <user>/youniverse-widgets — never portals-os master repo)
+
+40. ORACLE ROUTING — CURRENT IMPLEMENTATION DETAIL
+
+Oracle's function-calling tool manifest (oracleService.ts):
+
+  openWindow(appId)        — Opens a Portals OS window by AppId.
+                             ⚠️ Currently checks static APPS array only.
+                             Sovereign Weaver applets are not reachable.
+
+  openFile(fileId)         — Opens a file in the FileViewer.
+
+  submitDeliverable(...)   — Posts agent output to NotNotes pendingDeliverables.
+
+  confirmSquad(...)        — Names the squad, initializes a NotNotes project,
+                             opens the NotNotes window.
+
+  compileArtifact(...)     — Calls compileFinalArtifact() in the Kernel store.
+
+  commitToBooksOS(...)     — Calls commitProjectToBooks() → Books OS integration.
+
+Oracle system prompt (The Tourniquet Protocol):
+  Stage 1 — Strategic Discovery: diagnose the user's problem iteratively.
+  Stage 2 — Taking Action: confirmSquad → agents begin work → deliverables.
+  Stage 3 — Compilation: compileArtifact → final Take Action Artifact.
+  Stage 4 — Memory Archival: commitToBooksOS (Memory tier users only).
+
+Entity distinction (enforced in system prompt):
+  THE ORACLE  — diagnostic voice, tactical guide, agent orchestrator.
+  ONE (ONEAI) — the observer orb, cross-session continuity, Books OS ledger keeper.
+
+Known gaps:
+  - No launchAgent(agentId) tool to programmatically open a specific AgentPWA.
+  - summarizeOracleHistory() returns random mock strings (not a real LLM call).
+  - generateOracleTitle() returns random mock strings (not a real LLM call).
+  - openWindow() cannot open dynamically-loaded sovereign applets.
+
+---
+
+41. PUBLIC / OWNER VIEW — CURRENT SEPARATION
+
+Hostname Routing (Fully Implemented — lib/youniverseRouting.ts):
+  itsyouonline.com           → gateway (AtLineGateway)
+  claim.itsyouonline.com     → ClaimYouniverse
+  <handle>.itsyouonline.com  → identity → Public or OS view
+  localhost/?@=handle         → identity (dev mode)
+  localhost/?claim=handle     → claim (dev mode)
+
+Public vs. OS mode gate (App.tsx):
+  showPublicYouniverse = isYouniverseRoute && !subdomainOsActive
+  subdomainOsActive is toggled by localStorage key:
+    youniverse_os_active_<handle> = "true"
+
+  ⚠️ SECURITY GAP: The OS view can be accessed by any visitor who injects
+  the localStorage key. There is no server-side verification of the OS gate.
+  The fix: issue a short-lived signed session cookie or verify the JWT at the
+  OS boot route before rendering Desktop. Backend APIs are protected, but the
+  full Portals OS shell itself is not.
+
+Owner check in PublicYouniverse.tsx:
+  const isOwner =
+    localStorage.getItem('active_youniverse_handle') === identity.username &&
+    !!localStorage.getItem('youniverse_session_token');
+
+  ⚠️ Same gap: purely client-side. Entering the OS still requires
+  server verification of the session token before granting OS access.
+
+---
+
+42. FINAL ARCHITECTURAL STATEMENT
 
 ItsYouOnline is the gateway.
 
@@ -1216,11 +1427,15 @@ ONEAI is the sovereign intelligence that travels with the person.
 
 Oracle is the diagnostic and orchestration intelligence.
 
+Weaver is the spatial builder who synthesizes the user's sovereign environment.
+
 Nexus coordinates sovereign agents.
 
 Agents are independently addressable problem-solving entities.
 
-NotNotes is working memory.
+NotNotes is working memory — identity-scoped in PostgreSQL, not localStorage.
+
+Sovereign Applets (REACT_WIDGET) live in the user's NotNotes database, not in git.
 
 Books OS is long-term memory.
 
@@ -1230,4 +1445,9 @@ AI providers are replaceable infrastructure.
 
 NFC will eventually allow ONEAI to establish trusted relationships with the user's devices.
 
-The architecture is therefore centered on the person and their Youniverse, not on any particular application, AI provider, device, or implementation.
+The architecture is therefore centered on the person and their Youniverse,
+not on any particular application, AI provider, device, or implementation.
+
+No user's widget, agent output, or synthesized component should ever be
+committed to the shared platform repository. Every sovereign artifact
+belong in the user's own isolated data boundary.
