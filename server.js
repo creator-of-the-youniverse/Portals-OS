@@ -10,6 +10,7 @@ import { verifyJwt } from "./middleware/verifyJwt.js";
 import { weaverGenerateHandler } from "./controllers/weaverController.js";
 import { saveWeaverArtifactHandler, getWeavedWidgetsHandler } from "./controllers/notNotesController.js";
 import { getYouniverseContextHandler } from "./controllers/youniverseContextController.js";
+import { getYouniversePublicDataHandler } from "./controllers/youniversePublicController.js";
 
 dotenv.config();
 
@@ -581,6 +582,15 @@ app.get(
   "/api/youniverse/:handle/context",
   verifyJwt,
   getYouniverseContextHandler
+);
+
+// ============================================================================
+// YOUNIVERSE PUBLIC DATA
+// GET /api/youniverse/:handle/public
+// ============================================================================
+app.get(
+  "/api/youniverse/:handle/public",
+  getYouniversePublicDataHandler
 );
 
 // Serve the React app for any non-API routes
