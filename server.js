@@ -9,6 +9,7 @@ import rateLimit from "express-rate-limit";
 import { verifyJwt } from "./middleware/verifyJwt.js";
 import { weaverGenerateHandler } from "./controllers/weaverController.js";
 import { saveWeaverArtifactHandler, getWeavedWidgetsHandler } from "./controllers/notNotesController.js";
+import { getYouniverseContextHandler } from "./controllers/youniverseContextController.js";
 
 dotenv.config();
 
@@ -569,6 +570,17 @@ app.get(
   "/api/not-notes/widgets",
   verifyJwt,
   getWeavedWidgetsHandler
+);
+
+// ============================================================================
+// YOUNIVERSE CONTEXT — SERVER-VERIFIED OWNER GATE
+// GET /api/youniverse/:handle/context
+// verifyJwt stamps req.user; handler compares req.user.youniverseId to DB row.
+// ============================================================================
+app.get(
+  "/api/youniverse/:handle/context",
+  verifyJwt,
+  getYouniverseContextHandler
 );
 
 // Serve the React app for any non-API routes

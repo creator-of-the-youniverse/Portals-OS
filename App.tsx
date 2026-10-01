@@ -46,18 +46,73 @@ const App: React.FC = () => {
 
   const isClaimRoute = identity?.kind === "claim";
 
-  // Subdomain Portals OS active state
-  // Use useEffect so we can safely read localStorage after identity resolves
+  // Subdomain Portals OS active state.
+  // Determined by a server-verified ownership check — NOT a client-side flag.
   const [subdomainOsActive, setSubdomainOsActive] = useState<boolean>(false);
+  const [ownerGateChecked, setOwnerGateChecked] = useState<boolean>(false);
 
   useEffect(() => {
-    if (identity?.username) {
-      const stored = localStorage.getItem(`youniverse_os_active_${identity.username}`);
-      const params = new URLSearchParams(window.location.search);
-      if (stored === "true" || params.get("mode") === "os" || params.get("enter") === "true") {
-        setSubdomainOsActive(true);
-      }
+    if (!identity?.username) return;
+
+    const handle = identity.username;
+    const params = new URLSearchParams(window.location.search);
+
+    // Fast path: explicit ?mode=os or ?enter=true query params skip the gate check
+    // (still requires a valid session to load protected data, so this is fine UX-wise).
+    if (params.get("mode") === "os" || params.get("enter") === "true") {
+      setSubdomainOsActive(true);
+      setOwnerGateChecked(true);
+      return;
     }
+
+    // ── Server-verified owner gate ──────────────────────────────────────────
+    // Attempt to verify ownership via JWT. If the user is not the owner (or has
+    // no token at all), fall through to the Public Youniverse view.
+    const verifyOwnership = async () => {
+      const token =
+        localStorage.getItem("youniverse_session_token") ||
+        localStorage.getItem("weaver_jwt");
+
+      if (!token) {
+        // No session present — definitely not the owner in this browser.
+        setSubdomainOsActive(false);
+        setOwnerGateChecked(true);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/youniverse/${handle}/context`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          // 401 / 403 / 404 — not owner or token is stale.
+          setSubdomainOsActive(false);
+          setOwnerGateChecked(true);
+          return;
+        }
+
+        const data = await res.json();
+
+        if (data.success && data.isOwner === true) {
+          setSubdomainOsActive(true);
+          // Cache confirmation so the gate only hits the server once per session.
+          localStorage.setItem(`youniverse_os_active_${handle}`, "true");
+        } else {
+          // Valid token but different owner — show public view.
+          setSubdomainOsActive(false);
+          localStorage.removeItem(`youniverse_os_active_${handle}`);
+        }
+      } catch (_err) {
+        // Network failure — fail safe: show public view.
+        console.warn("[OwnerGate] Network error, defaulting to public view.");
+        setSubdomainOsActive(false);
+      } finally {
+        setOwnerGateChecked(true);
+      }
+    };
+
+    verifyOwnership();
   }, [identity?.username]);
 
   // Load custom sovereign widgets from NotNotes when OS boots
@@ -288,7 +343,11 @@ const App: React.FC = () => {
   // ROUTING LOGIC
   // ────────────────────────────────────────────────────────────
   const showClaimRoute = isClaimRoute;
-  const showPublicYouniverse = isYouniverseRoute && !subdomainOsActive;
+
+  // On a Youniverse subdomain, hold rendering until the async owner-gate check
+  // resolves so we never flash the public view while the fetch is in-flight.
+  const gateStillPending = isYouniverseRoute && !ownerGateChecked;
+  const showPublicYouniverse = isYouniverseRoute && ownerGateChecked && !subdomainOsActive;
   const showWelcome = !isYouniverseRoute && !isClaimRoute && !hasWelcomed;
 
   // First-Touch Onboarding overrides
@@ -301,7 +360,15 @@ const App: React.FC = () => {
   return (
     <ClubRadioProvider>
     <AnimatePresence mode="sync">
-      {showClaimRoute ? (
+      {/* Owner gate in-flight — render nothing while async check resolves */}
+      {gateStillPending ? (
+        <motion.div
+          key="gate-loading"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0 }}
+          className="fixed inset-0 bg-black"
+        />
+      ) : showClaimRoute ? (
         <ClaimYouniverse key="claim" />
       ) : showPublicYouniverse ? (
         <PublicYouniverse key="youniverse" onEnterOs={enterSubdomainOs} />
