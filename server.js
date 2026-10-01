@@ -11,6 +11,7 @@ import { weaverGenerateHandler } from "./controllers/weaverController.js";
 import { saveWeaverArtifactHandler, getWeavedWidgetsHandler } from "./controllers/notNotesController.js";
 import { getYouniverseContextHandler } from "./controllers/youniverseContextController.js";
 import { getYouniversePublicDataHandler } from "./controllers/youniversePublicController.js";
+import { proxyBrowserHandler } from "./controllers/browserProxyController.js";
 
 dotenv.config();
 
@@ -592,6 +593,14 @@ app.get(
   "/api/youniverse/:handle/public",
   getYouniversePublicDataHandler
 );
+
+// ============================================================================
+// BROWSER PROXY — Frame-Stripping Sovereign Web Fetcher
+// GET /api/browser/proxy?url=<encoded-url>
+// Fetches remote pages server-side, strips X-Frame-Options/CSP headers,
+// and injects a <base> tag so relative links resolve correctly.
+// ============================================================================
+app.get("/api/browser/proxy", proxyBrowserHandler);
 
 // Serve the React app for any non-API routes
 app.use((req, res, next) => {
