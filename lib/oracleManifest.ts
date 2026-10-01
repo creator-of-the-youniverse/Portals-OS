@@ -163,6 +163,29 @@ export const commitToBooksOSTool = {
   ],
 };
 
+export const summonUrlTool = {
+  functionDeclarations: [
+    {
+      name: "summonUrl",
+      description: "Open any URL or website as an isolated, windowed browser viewport directly on the Portals OS desktop. Use this to bring external web content into the workspace without leaving the OS.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          url: {
+            type: "STRING",
+            description: "The full URL to summon (e.g. 'https://news.ycombinator.com'). Must start with http:// or https://.",
+          },
+          title: {
+            type: "STRING",
+            description: "Optional display title for the browser window (e.g. 'Hacker News').",
+          },
+        },
+        required: ["url"],
+      },
+    },
+  ],
+};
+
 export const ORACLE_TOOLS = [
   openWindowTool,
   openFileTool,
@@ -170,5 +193,6 @@ export const ORACLE_TOOLS = [
   confirmSquadTool,
   compileArtifactTool,
   commitToBooksOSTool,
-  launchAgentTool
+  launchAgentTool,
+  summonUrlTool,
 ];

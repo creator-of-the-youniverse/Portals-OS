@@ -100,6 +100,22 @@ const VoiceAssistantOverlay: React.FC<VoiceAssistantOverlayProps> = ({ embedded 
                                 executedActions.push(`Session archived to Books OS: ${location.tower}/${location.shelf}`);
                             }
                         }
+                    } else if (fc.name === 'summonUrl') {
+                        const { url, title } = fc.args;
+                        if (url) {
+                            let safeUrl = url.trim();
+                            if (!safeUrl.startsWith('http://') && !safeUrl.startsWith('https://')) {
+                                safeUrl = 'https://' + safeUrl;
+                            }
+                            openWindow('browser' as AppId, { width: 1100, height: 700 }, { url: safeUrl, title: title || safeUrl });
+                            executedActions.push(`Summoned: ${title || safeUrl}`);
+                        }
+                    } else if (fc.name === 'launchAgent') {
+                        const { agentId, initialPayload } = fc.args;
+                        if (agentId) {
+                            openWindow(agentId as AppId, initialPayload || undefined);
+                            executedActions.push(`Launched agent: ${agentId}`);
+                        }
                     }
                 }
             }

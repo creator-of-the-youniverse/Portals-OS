@@ -123,7 +123,14 @@ export const APPS_CONFIG: Record<BuiltInAppId, AppDefinition> = {
     icon: Globe,
     component: lazy(() => import("./apps/WebApp")),
     description: "Generic PWA container for weaved web apps.",
-  }
+  },
+  browser: {
+    id: "browser" as BuiltInAppId,
+    name: "Browser",
+    icon: Globe,
+    component: lazy(() => import("./apps/BrowserWindowApp")),
+    description: "Sovereign in-OS browser. Summon any URL into a windowed viewport.",
+  },
 };
 
 export const APPS = Object.values(APPS_CONFIG);
@@ -144,6 +151,7 @@ const CORE_APP_IDS: BuiltInAppId[] = [
   "messages" as BuiltInAppId,
   "ones" as BuiltInAppId,
   "clubYouniverse" as BuiltInAppId,
+  "browser" as BuiltInAppId,
 ];
 
 /**

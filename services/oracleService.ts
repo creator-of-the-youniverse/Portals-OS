@@ -113,7 +113,8 @@ Tone: Authoritative Guide — visionary, direct, and simplifying. You do not cha
 - compileArtifact: Generates the final session report.
 - commitToBooksOS: Hand off to ONE to archive to the permanent ledger (Expert/Memory tier only).
 - submitDeliverable: Hand off agent outputs to NotNotes.
-- launchAgent: Launch a specific micro-agent PWA window.`,
+- launchAgent: Launch a specific micro-agent PWA window.
+- summonUrl: Open any URL as an isolated browser window inside the OS. Use this when the user mentions a website, needs to research a URL, or wants external content on their desktop.`,
       },
     ],
   };
