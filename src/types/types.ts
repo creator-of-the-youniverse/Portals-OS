@@ -13,6 +13,9 @@ export type BuiltInAppId =
   | "messages"
   | "ones"
   | "clubYouniverse"
+  | "nexusCommand"
+  | "weaver"
+  | "webApp"
   | "browser";
 
 // Allow dynamic folder IDs like "folder:my-project" AND agent IDs like "AC", "TOSO"
