@@ -61,145 +61,7 @@ async function generateContent(payload: {
   return data;
 }
 
-const appIdsList = APPS.map((app) => `'${app.id}' ('${app.name}')`).join(", ");
-
-const openWindowTool = {
-  functionDeclarations: [
-    {
-      name: "openWindow",
-      description: "Opens a specified application window on the desktop.",
-      parameters: {
-        type: "OBJECT",
-        properties: {
-          appId: {
-            type: "STRING",
-            description: `The unique identifier for the application to open. Available apps are: ${appIdsList}.`,
-          },
-        },
-        required: ["appId"],
-      },
-    },
-  ],
-};
-
-const openFileTool = {
-  functionDeclarations: [
-    {
-      name: "openFile",
-      description: "Opens a specific file in the appropriate viewer.",
-      parameters: {
-        type: "OBJECT",
-        properties: {
-          fileId: {
-            type: "STRING",
-            description:
-              'The ID of the file to open (e.g., "about-md", "resume-pdf").',
-          },
-        },
-        required: ["fileId"],
-      },
-    },
-  ],
-};
-
-const submitDeliverableTool = {
-  functionDeclarations: [
-    {
-      name: "submitDeliverable",
-      description: "Submits an agent's output (deliverable) to the Not Notes compilation layer for the user to approve.",
-      parameters: {
-        type: "OBJECT",
-        properties: {
-          agentId: {
-            type: "STRING",
-            description: "The unique ID of the agent (e.g., 'A', 'B', 'C').",
-          },
-          agentName: {
-            type: "STRING",
-            description: "The name of the agent (e.g., 'Angle', 'Blueprint').",
-          },
-          content: {
-            type: "STRING",
-            description: "The actual content or report produced by the agent.",
-          },
-        },
-        required: ["agentId", "agentName", "content"],
-      },
-    },
-  ],
-};
-
-const confirmSquadTool = {
-  functionDeclarations: [
-    {
-      name: "confirmSquad",
-      description: "Names the current squad and initiates a project in NotNotes once the user agrees the diagnosis is satisfactory.",
-      parameters: {
-        type: "OBJECT",
-        properties: {
-          squadName: {
-            type: "STRING",
-            description: "The official name for this tactical squad (e.g., 'The Conversion Garrison').",
-          },
-          agentIds: {
-            type: "ARRAY",
-            items: { type: "STRING" },
-            description: "The list of agent IDs included in this squad.",
-          },
-        },
-        required: ["squadName", "agentIds"],
-      },
-    },
-  ],
-};
-
-const compileArtifactTool = {
-  functionDeclarations: [
-    {
-      name: "compileArtifact",
-      description: "Compiles all deliverables into a final 'Take Action Artifact' in NotNotes at the end of the session.",
-      parameters: {
-        type: "OBJECT",
-        properties: {
-          projectName: {
-            type: "STRING",
-            description: "The name of the project to compile.",
-          },
-        },
-        required: ["projectName"],
-      },
-    },
-  ],
-};
-
-const commitToBooksOSTool = {
-  functionDeclarations: [
-    {
-      name: "commitToBooksOS",
-      description: "Archives the final artifact to Books OS (books.itsyouonline.com) for users with memory-tier access.",
-      parameters: {
-        type: "OBJECT",
-        properties: {
-          location: {
-            type: "OBJECT",
-            properties: {
-              tower: { type: "STRING", description: "The Month (e.g., 'Tower of April')" },
-              shelf: { type: "STRING", description: "The Year (e.g., 'Shelf 2026')" },
-              book: { type: "STRING", description: "The Week (e.g., 'Week 4')" },
-              page: { type: "STRING", description: "The Day (e.g., 'Monday')" },
-            },
-            required: ["tower", "shelf", "book", "page"],
-          },
-          summary: {
-            type: "STRING",
-            description: "A comprehensive ONEAI summary of the session to be logged next to the artifact.",
-          },
-        },
-        required: ["location", "summary"],
-      },
-    },
-  ],
-};
+import { ORACLE_TOOLS } from "../lib/oracleManifest";
 
 const getOracleSystemInstruction = () => {
   return {
@@ -250,8 +112,8 @@ Tone: Authoritative Guide — visionary, direct, and simplifying. You do not cha
 - confirmSquad: Finalizes the agent group and opens the NotNotes project.
 - compileArtifact: Generates the final session report.
 - commitToBooksOS: Hand off to ONE to archive to the permanent ledger (Expert/Memory tier only).
-- openWindow: Opens PWA windows.
-- submitDeliverable: Hand off agent outputs to NotNotes.`,
+- submitDeliverable: Hand off agent outputs to NotNotes.
+- launchAgent: Launch a specific micro-agent PWA window.`,
       },
     ],
   };
@@ -281,14 +143,7 @@ export const generateOracleResponse = async (
     ];
     
     // Tools manifest for the Oracle
-    const tools: any[] = [
-      openWindowTool, 
-      openFileTool, 
-      submitDeliverableTool,
-      confirmSquadTool,
-      compileArtifactTool,
-      commitToBooksOSTool
-    ];
+    const tools: any[] = [...ORACLE_TOOLS];
     
     if (useGrounding) {
       tools.push({ googleSearch: {} });

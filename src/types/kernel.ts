@@ -25,7 +25,7 @@ export interface KernelState {
   setInitialGreetingSpoken: (status: boolean) => void;
   setMicPermissionGranted: (status: boolean) => void;
 
-  openWindow: (appId: AppId, size?: { width: number; height: number }) => void;
+  openWindow: (appId: AppId, sizeOrPayload?: { width: number; height: number } | string, metadata?: any) => void;
   closeWindow: (id: string) => void;
   closeWindowByAppId: (appId: AppId) => void;
   focusWindow: (id: string) => void;

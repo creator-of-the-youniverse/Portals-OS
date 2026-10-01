@@ -109,7 +109,7 @@ export interface KernelState {
   setMicPermissionGranted: (status: boolean) => void;
   setRadioWidgetVisible: (status: boolean) => void;
 
-  openWindow: (appId: AppId, size?: { width: number; height: number }, metadata?: any) => void;
+  openWindow: (appId: AppId, sizeOrPayload?: { width: number; height: number } | string, metadata?: any) => void;
   closeWindow: (id: string) => void;
   closeWindowByAppId: (appId: AppId) => void;
   focusWindow: (id: string) => void;

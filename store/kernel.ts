@@ -17,6 +17,7 @@ import type {
   OnboardingAct,
   OwnerRole,
 } from "../types/onboarding";
+import { getAllApps } from "../apps.config";
 
 const useKernelStore = create<KernelState>()(
   persist(
@@ -81,7 +82,16 @@ const useKernelStore = create<KernelState>()(
       freeNodesUsed: [],
       favoriteNodes: [],
 
-      openWindow: (appId, size = { width: 600, height: 450 }, metadata) => {
+      openWindow: (appId, sizeOrPayload, metadata) => {
+        let size = { width: 600, height: 450 };
+        let initialPayload: string | undefined;
+
+        if (typeof sizeOrPayload === 'string') {
+          initialPayload = sizeOrPayload;
+        } else if (sizeOrPayload) {
+          size = sizeOrPayload;
+        }
+
         // Check if window for this app already exists - focus it instead of creating duplicate
         const existingWindow = get().windows.find(w => w.appId === appId);
         if (existingWindow) {
@@ -89,7 +99,7 @@ const useKernelStore = create<KernelState>()(
           set((state) => ({
             windows: state.windows.map(w =>
               w.id === existingWindow.id
-                ? { ...w, minimized: false, zIndex: state.nextZIndex }
+                ? { ...w, minimized: false, zIndex: state.nextZIndex, initialPayload: initialPayload || w.initialPayload }
                 : w
             ),
             nextZIndex: state.nextZIndex + 1,
@@ -143,21 +153,21 @@ const useKernelStore = create<KernelState>()(
           console.log(`[WINDOW STACK] Opening ${appId} - existing windows: ${windowCount}, Y position: ${position.y}`);
         }
 
+        const allApps = getAllApps(get().projectFolders, get().weavedWidgets);
+        const appDef = allApps.find(a => a.id === appId);
+        const title = appDef ? appDef.name : appId.charAt(0).toUpperCase() + appId.slice(1).replace(/([A-Z])/g, " $1").trim();
+
         const newWindow: WindowInstance = {
           id: nanoid(),
           appId,
-          title:
-            appId.charAt(0).toUpperCase() +
-            appId
-              .slice(1)
-              .replace(/([A-Z])/g, " $1")
-              .trim(),
+          title,
           position,
           size,
           zIndex: get().nextZIndex,
           minimized: false,
           snapState: get().isMobile ? "maximized" : "none",
           metadata,
+          initialPayload,
         };
 
         if (get().isMobile) {

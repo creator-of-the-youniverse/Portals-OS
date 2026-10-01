@@ -88,6 +88,7 @@ export interface WindowInstance {
   preSnapPosition?: { x: number; y: number };
   preSnapSize?: { width: number; height: number };
   metadata?: any; // Optional data passed to app (e.g., file path)
+  initialPayload?: string; // Optional context or task payload for micro-agents
 }
 
 export type GeminiModel =
