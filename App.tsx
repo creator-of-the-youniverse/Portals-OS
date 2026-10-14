@@ -27,13 +27,34 @@ import { PwaInstallPrompt } from "./components/PwaInstallPrompt";
 import { ClubRadioProvider } from "./contexts/ClubRadioContext";
 import YouuniverseRadioBar from "./components/YouuniverseRadioBar";
 
-// First-Touch Onboarding System
 import AtLineGateway from "./components/gateway/AtLineGateway";
+import OwnerLoginModal from "./components/gateway/OwnerLoginModal";
 import OnboardingFlow from "./components/onboarding/OnboardingFlow";
 import VerificationBanner from "./components/onboarding/VerificationBanner";
 import { PortalBackdrop } from "./components/PortalBackdrop";
 import { claimHandle } from "./services/identityService";
 import { normalizeHandle } from "./types/onboarding";
+
+function getClaimErrorMessage(errorCode: string | undefined, handle: string): string {
+  switch (errorCode) {
+    case 'taken':
+      return `@${handle} has already been claimed. Please choose a different handle.`;
+    case 'invalid_request':
+      return 'Please check your handle and email address and try again.';
+    case 'rate_limited':
+      return 'Too many claim attempts. Please wait a moment before retrying.';
+    case 'network_error':
+      return 'Unable to connect to the claim service. Please check your connection and try again.';
+    case 'missing_session_token':
+    case 'invalid_session_response':
+      return 'The claim service returned an invalid response. Please try again later.';
+    case 'invalid_json_response':
+      return 'The claim service returned an unreadable response. Please try again later.';
+    case 'claim_failed':
+    default:
+      return 'Unable to claim this handle right now. Please try again later.';
+  }
+}
 
 const App: React.FC = () => {
   const windows = useKernel((state) => state.windows);
@@ -50,6 +71,16 @@ const App: React.FC = () => {
   // Determined by a server-verified ownership check — NOT a client-side flag.
   const [subdomainOsActive, setSubdomainOsActive] = useState<boolean>(false);
   const [ownerGateChecked, setOwnerGateChecked] = useState<boolean>(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState<boolean>(false);
+
+  const handleSuccessfulLogin = useCallback((token: string) => {
+    localStorage.setItem("weaver_jwt", token);
+    localStorage.setItem("youniverse_session_token", token);
+    setIsOwnerAuthenticated(true);
+    setSubdomainOsActive(true);
+    setIsLoginModalOpen(false);
+  }, []);
 
   useEffect(() => {
     if (!identity?.username) return;
@@ -75,6 +106,7 @@ const App: React.FC = () => {
 
       if (!token) {
         // No session present — definitely not the owner in this browser.
+        setIsOwnerAuthenticated(false);
         setSubdomainOsActive(false);
         setOwnerGateChecked(true);
         return;
@@ -87,6 +119,7 @@ const App: React.FC = () => {
 
         if (!res.ok) {
           // 401 / 403 / 404 — not owner or token is stale.
+          setIsOwnerAuthenticated(false);
           setSubdomainOsActive(false);
           setOwnerGateChecked(true);
           return;
@@ -95,17 +128,23 @@ const App: React.FC = () => {
         const data = await res.json();
 
         if (data.success && data.isOwner === true) {
-          setSubdomainOsActive(true);
-          // Cache confirmation so the gate only hits the server once per session.
-          localStorage.setItem(`youniverse_os_active_${handle}`, "true");
+          setIsOwnerAuthenticated(true);
+          const params = new URLSearchParams(window.location.search);
+          if (params.get("mode") === "os" || params.get("enter") === "true") {
+            setSubdomainOsActive(true);
+          } else {
+            // ALWAYS default to Public Front Gates first on subdomains
+            setSubdomainOsActive(false);
+          }
         } else {
           // Valid token but different owner — show public view.
+          setIsOwnerAuthenticated(false);
           setSubdomainOsActive(false);
-          localStorage.removeItem(`youniverse_os_active_${handle}`);
         }
       } catch (_err) {
         // Network failure — fail safe: show public view.
         console.warn("[OwnerGate] Network error, defaulting to public view.");
+        setIsOwnerAuthenticated(false);
         setSubdomainOsActive(false);
       } finally {
         setOwnerGateChecked(true);
@@ -272,10 +311,12 @@ const App: React.FC = () => {
   const completeOnboardingDialogue = useKernel((state) => state.completeOnboardingDialogue);
   const upgradeToVerified = useKernel((state) => state.upgradeToVerified);
   const [isClaimLoading, setIsClaimLoading] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   // Handle gateway claim submission
   const handleGatewayClaim = useCallback(async (handle: string, email: string) => {
     setIsClaimLoading(true);
+    setClaimError(null);
     setOnboardingHandle(handle);
     setOnboardingEmail(email);
     setOnboardingPhase('CLAIMING');
@@ -283,10 +324,10 @@ const App: React.FC = () => {
     try {
       const result = await claimHandle({ handle, email });
 
-      if (result.success) {
+      if (result.success && typeof result.sessionToken === 'string' && result.sessionToken.trim().length > 0) {
         // Store session locally
         localStorage.setItem('active_youniverse_handle', handle);
-        localStorage.setItem('youniverse_session_token', result.sessionToken);
+        localStorage.setItem('youniverse_session_token', result.sessionToken.trim());
         localStorage.setItem('youniverse_owner_email', email);
 
         // Transition to portal animation then dialogue
@@ -305,13 +346,14 @@ const App: React.FC = () => {
         setIsClaimLoading(false);
         window.location.href = `/?claim=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}`;
         return;
+      } else {
+        setOnboardingPhase('GATEWAY');
+        setClaimError(getClaimErrorMessage(result.error, handle));
       }
     } catch (e) {
-      console.warn('[ONBOARDING] Claim error, proceeding anyway:', e);
-      setOwnerRole('PROVISIONAL_OWNER');
-      playRandomWelcomeMessage();
-      startOnboardingDialogue();
-      setHasWelcomed(true);
+      console.error('[ONBOARDING] Claim error:', e);
+      setOnboardingPhase('GATEWAY');
+      setClaimError(getClaimErrorMessage('network_error', handle));
     } finally {
       setIsClaimLoading(false);
     }
@@ -371,7 +413,38 @@ const App: React.FC = () => {
       ) : showClaimRoute ? (
         <ClaimYouniverse key="claim" />
       ) : showPublicYouniverse ? (
-        <PublicYouniverse key="youniverse" onEnterOs={enterSubdomainOs} />
+        <>
+          <PublicYouniverse
+            key="youniverse"
+            handle={identity?.username || ""}
+            onOpenLoginModal={() => {
+              if (isOwnerAuthenticated) {
+                setSubdomainOsActive(true);
+              } else {
+                setIsLoginModalOpen(true);
+              }
+            }}
+          />
+
+          {isOwnerAuthenticated && !subdomainOsActive && (
+            <div className="fixed bottom-6 right-6 z-50">
+              <button
+                onClick={() => setSubdomainOsActive(true)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-semibold px-4 py-2.5 rounded-xl text-xs font-mono shadow-2xl flex items-center gap-2 transition-all border border-emerald-400/30 animate-bounce"
+              >
+                <span>⚡ Enter OS Desktop</span>
+              </button>
+            </div>
+          )}
+
+          {isLoginModalOpen && (
+            <OwnerLoginModal
+              handle={identity?.username || ""}
+              onClose={() => setIsLoginModalOpen(false)}
+              onSuccess={handleSuccessfulLogin}
+            />
+          )}
+        </>
       ) : showGateway || showPortalTransition || showOnboardingDialogue ? (
         /* ── FIRST-TOUCH ONBOARDING WRAPPED IN PORTAL ── */
         <PortalBackdrop key="onboarding-portal">
@@ -383,6 +456,16 @@ const App: React.FC = () => {
                 exit={{ opacity: 0, scale: 1.05 }}
                 transition={{ duration: 0.8, ease: "easeInOut" }}
               >
+                {claimError && (
+                  <motion.div
+                    role="alert"
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-4 px-4 py-2 rounded-md bg-red-950/60 border border-red-500/30 text-red-200 text-xs font-mono text-center max-w-md z-30"
+                  >
+                    {claimError}
+                  </motion.div>
+                )}
                 <AtLineGateway
                   onClaim={handleGatewayClaim}
                   isLoading={isClaimLoading}
@@ -501,7 +584,7 @@ const App: React.FC = () => {
                 className="ml-2 rounded-md bg-white/10 px-2 py-0.5 text-[10px] text-white/70 hover:bg-white/20 hover:text-white transition-colors"
                 title="Switch to Public Showcase Page"
               >
-                Public Page
+                View Public Front Gates
               </button>
             </div>
           )}
