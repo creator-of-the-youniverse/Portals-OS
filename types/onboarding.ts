@@ -152,7 +152,7 @@ export interface ClaimRequest {
 export interface ClaimResponse {
   success: boolean;
   subdomain: string;
-  sessionToken: string;
+  sessionToken?: string;
   error?: string;
 }
 

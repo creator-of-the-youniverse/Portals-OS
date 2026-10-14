@@ -72,6 +72,8 @@ export async function checkHandleAvailability(
 export async function claimHandle(
   payload: ClaimRequest
 ): Promise<ClaimResponse> {
+  const subdomain = `${payload.handle}.itsyouonline.com`;
+
   try {
     const res = await fetch(`${API_BASE}/claim`, {
       method: "POST",
@@ -83,37 +85,80 @@ export async function claimHandle(
       if (res.status === 402) {
         return {
           success: false,
-          subdomain: `${payload.handle}.itsyouonline.com`,
-          error: 'payment_required',
+          subdomain,
+          error: "payment_required",
         };
       }
       if (res.status === 409) {
         return {
           success: false,
-          subdomain: `${payload.handle}.itsyouonline.com`,
-          error: 'taken',
+          subdomain,
+          error: "taken",
         };
       }
-      
+      if (res.status === 400) {
+        return {
+          success: false,
+          subdomain,
+          error: "invalid_request",
+        };
+      }
+      if (res.status === 429) {
+        return {
+          success: false,
+          subdomain,
+          error: "rate_limited",
+        };
+      }
+
       const errorText = await res.text().catch(() => "Unknown error");
-      console.warn("[identityService] Claim failed:", errorText);
-      // Graceful degradation — let the user proceed provisionally if DB is down
+      console.warn("[identityService] Claim failed:", res.status, errorText);
       return {
-        success: true,
-        subdomain: `${payload.handle}.itsyouonline.com`,
-        sessionToken: `provisional_${Date.now()}`,
-        error: undefined,
+        success: false,
+        subdomain,
+        error: "claim_failed",
       };
     }
 
-    return await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      return {
+        success: false,
+        subdomain,
+        error: "invalid_json_response",
+      };
+    }
+
+    const sessionToken = typeof data?.sessionToken === "string" ? data.sessionToken.trim() : "";
+
+    if (data?.success === true) {
+      if (sessionToken.length > 0) {
+        return {
+          success: true,
+          subdomain,
+          sessionToken,
+        };
+      }
+      return {
+        success: false,
+        subdomain,
+        error: "missing_session_token",
+      };
+    }
+
+    return {
+      success: false,
+      subdomain,
+      error: "invalid_session_response",
+    };
   } catch (e) {
     console.warn("[identityService] Network error on claim:", e);
-    // Graceful degradation
     return {
-      success: true,
-      subdomain: `${payload.handle}.itsyouonline.com`,
-      sessionToken: `provisional_${Date.now()}`,
+      success: false,
+      subdomain,
+      error: "network_error",
     };
   }
 }
