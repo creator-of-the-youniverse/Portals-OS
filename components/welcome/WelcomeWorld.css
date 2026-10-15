@@ -1,0 +1,863 @@
+/* ─────────────────────────────────────────────────────────────
+   @welcome — The Foundational World
+   Vanilla CSS. Atmosphere is driven by two registered custom
+   properties so hue shifts glide instead of snapping.
+   ───────────────────────────────────────────────────────────── */
+
+@property --ww-hue {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 258;
+}
+@property --ww-hue2 {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 196;
+}
+@property --ww-glow {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.ww-root {
+  --ww-serif: "Instrument Serif", "Times New Roman", serif;
+  --ww-sans: "Inter", system-ui, sans-serif;
+  --ww-mono: "JetBrains Mono", ui-monospace, monospace;
+  --ww-ink: hsl(var(--ww-hue) 30% 96%);
+  --ww-dim: hsl(var(--ww-hue) 18% 70% / 0.62);
+  --ww-faint: hsl(var(--ww-hue) 20% 80% / 0.28);
+  --ww-accent: hsl(var(--ww-hue) 88% 68%);
+  --ww-accent2: hsl(var(--ww-hue2) 85% 64%);
+  --ww-glass: hsl(var(--ww-hue) 40% 12% / 0.38);
+  --ww-edge: hsl(var(--ww-hue) 60% 80% / 0.14);
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  color: var(--ww-ink);
+  font-family: var(--ww-sans);
+  background: hsl(var(--ww-hue) 45% 4%);
+  transition: --ww-hue 2.4s cubic-bezier(0.22, 1, 0.36, 1),
+              --ww-hue2 2.4s cubic-bezier(0.22, 1, 0.36, 1),
+              --ww-glow 1.2s ease;
+  isolation: isolate;
+}
+
+.ww-root * { box-sizing: border-box; }
+
+/* ── Atmosphere layers ─────────────────────────────────────── */
+
+.ww-sky {
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 58%, hsl(var(--ww-hue) 80% 40% / calc(0.32 + var(--ww-glow) * 0.3)), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 18% 22%, hsl(var(--ww-hue2) 85% 45% / 0.22), transparent 70%),
+    radial-gradient(ellipse 45% 38% at 85% 80%, hsl(calc(var(--ww-hue) + 40) 80% 42% / 0.2), transparent 70%),
+    radial-gradient(circle at 50% 50%, hsl(var(--ww-hue) 50% 7%), hsl(var(--ww-hue) 45% 3%));
+  animation: ww-breathe 18s ease-in-out infinite alternate;
+}
+
+.ww-aurora {
+  position: absolute;
+  inset: -50%;
+  z-index: 0;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    transparent 0deg,
+    hsl(var(--ww-hue) 90% 60% / 0.07) 60deg,
+    transparent 120deg,
+    hsl(var(--ww-hue2) 90% 60% / 0.06) 210deg,
+    transparent 280deg
+  );
+  filter: blur(40px);
+  animation: ww-spin 90s linear infinite;
+  mix-blend-mode: screen;
+}
+
+.ww-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ww-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+}
+
+.ww-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 45%, hsl(var(--ww-hue) 50% 2% / 0.85) 100%);
+}
+
+/* ── Thesis etched into the scenery ───────────────────────── */
+
+.ww-thesis {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 14%;
+  transform: translateX(-50%);
+  width: min(92vw, 1100px);
+  text-align: center;
+  pointer-events: none;
+  font-family: var(--ww-serif);
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  user-select: none;
+}
+.ww-thesis__a {
+  display: block;
+  font-size: clamp(1.4rem, 3.2vw, 2.6rem);
+  color: hsl(var(--ww-hue) 30% 85% / 0.16);
+}
+.ww-thesis__b {
+  display: block;
+  margin-top: 0.3em;
+  font-style: italic;
+  font-size: clamp(2rem, 5.6vw, 4.6rem);
+  background: linear-gradient(100deg, hsl(var(--ww-hue) 80% 85% / 0.42), hsl(var(--ww-hue2) 80% 80% / 0.28));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.ww-whisper {
+  position: absolute;
+  z-index: 3;
+  font-family: var(--ww-mono);
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ww-faint);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ── Chrome: top bar ──────────────────────────────────────── */
+
+.ww-top {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px clamp(16px, 4vw, 40px);
+}
+
+.ww-mark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--ww-mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.ww-mark__hearth {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ww-accent);
+  box-shadow: 0 0 12px var(--ww-accent), 0 0 32px hsl(var(--ww-hue) 90% 60% / 0.6);
+  animation: ww-ember 3.2s ease-in-out infinite;
+}
+.ww-mark__name { color: var(--ww-ink); }
+.ww-mark__name b { font-weight: 500; color: var(--ww-accent); }
+.ww-mark__sub {
+  color: var(--ww-dim);
+  font-size: 11px;
+  padding-left: 12px;
+  border-left: 1px solid var(--ww-edge);
+}
+
+.ww-chips { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+
+.ww-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--ww-edge);
+  background: var(--ww-glass);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  font-family: var(--ww-mono);
+  font-size: 11px;
+  color: var(--ww-dim);
+  text-decoration: none;
+  transition: border-color 0.3s, color 0.3s, transform 0.3s;
+}
+.ww-chip--live::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(150 80% 60%);
+  box-shadow: 0 0 10px hsl(150 80% 60%);
+  animation: ww-ember 2s ease-in-out infinite;
+}
+.ww-chip--celebrate {
+  color: var(--ww-ink);
+  border-color: hsl(var(--ww-hue) 90% 70% / 0.5);
+  box-shadow: 0 0 24px hsl(var(--ww-hue) 90% 60% / 0.25);
+}
+a.ww-chip:hover { color: var(--ww-ink); border-color: hsl(var(--ww-hue) 80% 75% / 0.45); transform: translateY(-1px); }
+
+/* ── Stage (the ritual) ───────────────────────────────────── */
+
+.ww-stage {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 20px 140px;
+}
+
+.ww-ritual {
+  width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.ww-stage-label {
+  font-family: var(--ww-mono);
+  font-size: 10px;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--ww-dim);
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ww-stage-label::before,
+.ww-stage-label::after {
+  content: "";
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ww-faint));
+}
+.ww-stage-label::after { transform: scaleX(-1); }
+
+.ww-steps { display: flex; gap: 8px; margin-top: 40px; }
+.ww-steps span {
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ww-faint);
+  transition: background 0.6s, width 0.6s;
+}
+.ww-steps span[data-on="true"] { background: var(--ww-accent); width: 38px; box-shadow: 0 0 10px var(--ww-accent); }
+
+/* Stage I · Threshold */
+
+.ww-prompt {
+  font-family: var(--ww-serif);
+  font-size: clamp(1.6rem, 3.6vw, 2.3rem);
+  color: var(--ww-ink);
+  margin: 0 0 30px;
+  font-weight: 400;
+}
+.ww-prompt em { color: var(--ww-accent); }
+
+.ww-at {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  width: min(440px, 100%);
+  padding: 8px 0 14px;
+}
+.ww-at__sym {
+  font-family: var(--ww-mono);
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  color: var(--ww-accent);
+  text-shadow: 0 0 22px hsl(var(--ww-hue) 90% 60% / 0.7);
+  margin-right: 4px;
+  animation: ww-ember 3s ease-in-out infinite;
+}
+.ww-at__input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--ww-ink);
+  font-family: var(--ww-mono);
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 300;
+  letter-spacing: 0.02em;
+  caret-color: var(--ww-accent);
+}
+.ww-at__input::placeholder { color: var(--ww-faint); }
+.ww-at__line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--ww-faint);
+  overflow: hidden;
+}
+.ww-at__line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--ww-accent), var(--ww-accent2), transparent);
+  transform: scaleX(var(--fill, 0));
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 0 14px var(--ww-accent);
+}
+.ww-at__domain {
+  margin-top: 14px;
+  font-family: var(--ww-mono);
+  font-size: 12px;
+  color: var(--ww-dim);
+  min-height: 18px;
+}
+.ww-at__domain b { color: var(--ww-ink); font-weight: 500; }
+
+.ww-signal {
+  margin-top: 26px;
+  min-height: 24px;
+  font-family: var(--ww-mono);
+  font-size: 12px;
+  color: var(--ww-dim);
+}
+.ww-signal--warn { color: hsl(30 90% 72%); }
+
+.ww-ack {
+  font-family: var(--ww-serif);
+  font-size: clamp(3rem, 9vw, 6rem);
+  line-height: 1;
+  margin: 0;
+  background: linear-gradient(120deg, var(--ww-ink), var(--ww-accent) 55%, var(--ww-accent2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 40px hsl(var(--ww-hue) 90% 60% / 0.35));
+}
+.ww-ack-sub {
+  margin-top: 18px;
+  font-family: var(--ww-mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--ww-dim);
+  text-transform: lowercase;
+}
+
+/* Stage II · Laws */
+
+.ww-laws {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: 6px;
+}
+@media (max-width: 560px) { .ww-laws { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.ww-law {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 10px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--ww-edge);
+  background: var(--ww-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: var(--ww-dim);
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.35s, color 0.35s, box-shadow 0.35s, background 0.35s;
+}
+.ww-law:hover { transform: translateY(-3px); color: var(--ww-ink); border-color: hsl(var(--ww-hue) 80% 75% / 0.32); }
+.ww-law:focus-visible { outline: 1px solid var(--ww-accent); outline-offset: 3px; }
+.ww-law[aria-pressed="true"] {
+  color: var(--ww-ink);
+  border-color: hsl(var(--ww-hue) 90% 70% / 0.65);
+  background: linear-gradient(160deg, hsl(var(--ww-hue) 70% 30% / 0.45), hsl(var(--ww-hue2) 70% 22% / 0.35));
+  box-shadow: 0 0 0 1px hsl(var(--ww-hue) 90% 70% / 0.2), 0 12px 40px -10px hsl(var(--ww-hue) 90% 55% / 0.55);
+}
+.ww-law__glyph {
+  font-family: var(--ww-serif);
+  font-size: 30px;
+  line-height: 1;
+  color: var(--ww-accent);
+  transition: transform 0.5s;
+}
+.ww-law[aria-pressed="true"] .ww-law__glyph { transform: scale(1.18); text-shadow: 0 0 18px var(--ww-accent); }
+.ww-law__label { font-size: 13px; font-weight: 500; letter-spacing: 0.04em; }
+.ww-law__rank {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-family: var(--ww-mono);
+  font-size: 9px;
+  color: var(--ww-accent);
+}
+
+.ww-law-whispers {
+  margin-top: 22px;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--ww-serif);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--ww-dim);
+}
+
+/* Stage III · Ignition */
+
+.ww-sigil {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+.ww-sigil__handle {
+  font-family: var(--ww-serif);
+  font-size: clamp(2.4rem, 6vw, 3.6rem);
+  line-height: 1;
+}
+.ww-sigil__laws {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.ww-sigil__laws span {
+  font-family: var(--ww-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ww-edge);
+  color: var(--ww-dim);
+}
+
+.ww-field {
+  width: min(380px, 100%);
+  position: relative;
+}
+.ww-field input {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ww-faint);
+  padding: 12px 4px;
+  text-align: center;
+  color: var(--ww-ink);
+  font-family: var(--ww-mono);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.3s;
+  caret-color: var(--ww-accent);
+}
+.ww-field input:focus { border-bottom-color: var(--ww-accent); }
+.ww-field input::placeholder { color: var(--ww-faint); }
+.ww-field__hint {
+  margin-top: 10px;
+  font-size: 11px;
+  font-family: var(--ww-mono);
+  color: var(--ww-faint);
+}
+
+.ww-key {
+  --p: 0;
+  position: relative;
+  margin-top: 36px;
+  width: 124px;
+  height: 124px;
+  border-radius: 50%;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ww-ink);
+  font: inherit;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s;
+}
+.ww-key:disabled { opacity: 0.32; cursor: not-allowed; }
+.ww-key:not(:disabled):hover { transform: scale(1.04); }
+.ww-key:focus-visible { outline: 1px solid var(--ww-accent); outline-offset: 6px; }
+.ww-key__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(var(--ww-accent) calc(var(--p) * 360deg), hsl(var(--ww-hue) 40% 50% / 0.15) 0);
+  -webkit-mask: radial-gradient(circle, transparent 57px, #000 58px);
+  mask: radial-gradient(circle, transparent 57px, #000 58px);
+  filter: drop-shadow(0 0 8px hsl(var(--ww-hue) 90% 60% / 0.7));
+}
+.ww-key__core {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: radial-gradient(circle at 50% 35%, hsl(var(--ww-hue) 70% 40% / calc(0.35 + var(--p) * 0.6)), hsl(var(--ww-hue) 50% 10% / 0.8));
+  border: 1px solid var(--ww-edge);
+  box-shadow: inset 0 0 30px hsl(var(--ww-hue) 90% 60% / calc(var(--p) * 0.6)), 0 0 calc(var(--p) * 60px) hsl(var(--ww-hue) 90% 60% / 0.6);
+}
+.ww-key__glyph { font-family: var(--ww-serif); font-size: 30px; line-height: 1; }
+.ww-key__label { font-family: var(--ww-mono); font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--ww-dim); }
+
+.ww-error {
+  margin-top: 18px;
+  font-family: var(--ww-mono);
+  font-size: 12px;
+  color: hsl(355 85% 74%);
+}
+
+/* Shared buttons */
+
+.ww-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 30px;
+  padding: 12px 26px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--ww-hue) 80% 75% / 0.35);
+  background: linear-gradient(135deg, hsl(var(--ww-hue) 70% 40% / 0.35), hsl(var(--ww-hue2) 70% 35% / 0.25));
+  color: var(--ww-ink);
+  font-family: var(--ww-mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+  backdrop-filter: blur(12px);
+  transition: transform 0.3s, box-shadow 0.3s, opacity 0.3s;
+}
+.ww-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 40px -10px hsl(var(--ww-hue) 90% 60% / 0.7); }
+.ww-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.ww-btn:focus-visible { outline: 1px solid var(--ww-accent); outline-offset: 4px; }
+
+.ww-back {
+  margin-top: 22px;
+  background: none;
+  border: 0;
+  color: var(--ww-faint);
+  font-family: var(--ww-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+.ww-back:hover { color: var(--ww-dim); }
+
+.ww-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+/* ── Global Pulse ticker ──────────────────────────────────── */
+
+.ww-pulse {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 0 22px;
+  pointer-events: none;
+}
+.ww-pulse__stats {
+  display: flex;
+  justify-content: center;
+  gap: clamp(20px, 5vw, 56px);
+  margin-bottom: 16px;
+}
+.ww-stat { text-align: center; }
+.ww-stat__n {
+  display: block;
+  font-family: var(--ww-serif);
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  line-height: 1;
+  color: var(--ww-ink);
+  font-variant-numeric: tabular-nums;
+}
+.ww-stat__l {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--ww-mono);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--ww-faint);
+}
+.ww-ticker {
+  position: relative;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+.ww-ticker__track {
+  display: inline-flex;
+  gap: 48px;
+  white-space: nowrap;
+  padding-left: 100%;
+  animation: ww-marquee var(--ww-ticker-dur, 60s) linear infinite;
+  font-family: var(--ww-mono);
+  font-size: 11px;
+  color: var(--ww-dim);
+}
+.ww-ticker__item { display: inline-flex; align-items: center; gap: 10px; }
+.ww-ticker__dot { width: 5px; height: 5px; border-radius: 50%; background: var(--dot, var(--ww-accent)); box-shadow: 0 0 8px var(--dot, var(--ww-accent)); }
+
+/* ── The Gate (Stage III → handoff) ───────────────────────── */
+
+.ww-gate {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  display: flex;
+}
+.ww-gate__panel {
+  flex: 1;
+  background:
+    linear-gradient(90deg, hsl(var(--ww-hue) 40% 5%), hsl(var(--ww-hue) 45% 9%));
+  border-color: hsl(var(--ww-hue) 90% 70% / 0.5);
+}
+.ww-gate__panel--l { border-right: 1px solid; box-shadow: inset -40px 0 80px -40px hsl(var(--ww-hue) 90% 60% / 0.6); }
+.ww-gate__panel--r { border-left: 1px solid; box-shadow: inset 40px 0 80px -40px hsl(var(--ww-hue) 90% 60% / 0.6); transform: scaleX(-1); }
+.ww-gate__seam {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, transparent, #fff 20%, #fff 80%, transparent);
+  box-shadow: 0 0 40px 8px hsl(var(--ww-hue) 100% 80%), 0 0 140px 40px hsl(var(--ww-hue) 90% 60% / 0.6);
+}
+.ww-gate__flood {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, #fff, hsl(var(--ww-hue) 100% 85%) 30%, hsl(var(--ww-hue) 80% 60% / 0.0) 70%);
+}
+.ww-gate__dest {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: hsl(var(--ww-hue) 60% 12%);
+  font-family: var(--ww-mono);
+  text-align: center;
+}
+.ww-gate__dest strong { font-family: var(--ww-serif); font-weight: 400; font-size: clamp(2.4rem, 7vw, 4.4rem); }
+
+/* ── Beacon (lives inside every personal Youniverse) ──────── */
+
+.ww-beacon {
+  --b-hue: 258;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--b-hue) 70% 75% / 0.22);
+  background: hsl(var(--b-hue) 40% 10% / 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: hsl(var(--b-hue) 30% 85% / 0.75);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  text-decoration: none;
+  transition: color 0.3s, border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+}
+.ww-beacon:hover {
+  color: #fff;
+  border-color: hsl(var(--b-hue) 90% 75% / 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px hsl(var(--b-hue) 90% 60% / 0.35);
+}
+.ww-beacon--floating { position: fixed; z-index: 70; left: 18px; bottom: 18px; }
+.ww-beacon--icon { padding: 7px; }
+.ww-beacon__flame {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+}
+.ww-beacon__flame svg { width: 16px; height: 16px; overflow: visible; }
+.ww-beacon__flame path { fill: hsl(var(--b-hue) 95% 70%); filter: drop-shadow(0 0 4px hsl(var(--b-hue) 95% 65%)); animation: ww-flicker 2.8s ease-in-out infinite; transform-origin: 50% 90%; }
+
+/* ── Peripheral Awareness Sensory States ──────────────────── */
+.ww-beacon.state-idle {
+  animation: ww-beacon-breathe 8s ease-in-out infinite;
+}
+
+.ww-beacon.state-warm {
+  border-color: hsl(var(--b-hue) 90% 75% / 0.7);
+  box-shadow: 0 0 28px hsl(var(--b-hue) 95% 65% / 0.55);
+  animation: ww-warm-surge 3s ease-out;
+}
+
+.ww-beacon.state-amber {
+  border-color: rgba(245, 158, 11, 0.7);
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.45);
+}
+.ww-beacon.state-amber .ww-beacon__flame path {
+  fill: #f59e0b;
+  filter: drop-shadow(0 0 6px #f59e0b);
+}
+
+.ww-beacon .hearth-core {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: hsl(var(--b-hue) 90% 65%);
+  box-shadow: 0 0 10px hsl(var(--b-hue) 90% 65%);
+}
+
+.ww-beacon .orbit-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px dashed hsl(var(--b-hue) 90% 75% / 0.4);
+  animation: ww-spin 12s linear infinite;
+  pointer-events: none;
+}
+.ww-beacon .orbit-ring::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 8px hsl(var(--b-hue) 95% 70%);
+}
+
+@keyframes ww-beacon-breathe {
+  0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 8px hsl(var(--b-hue) 90% 60% / 0.25)); }
+  50%      { opacity: 1; filter: drop-shadow(0 0 18px hsl(var(--b-hue) 90% 60% / 0.5)); }
+}
+
+@keyframes ww-warm-surge {
+  0%   { transform: scale(1); filter: brightness(1); }
+  35%  { transform: scale(1.06); filter: brightness(1.25); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+/* ── Arrival ceremony (on the personal side of the door) ──── */
+
+.ww-arrival {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  cursor: pointer;
+  background: radial-gradient(circle at 50% 50%, hsl(var(--a-hue) 70% 22%), hsl(var(--a-hue) 50% 4%) 70%);
+  color: hsl(var(--a-hue) 30% 96%);
+  font-family: "Inter", system-ui, sans-serif;
+}
+.ww-arrival__k {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: hsl(var(--a-hue) 30% 80% / 0.6);
+}
+.ww-arrival__h {
+  margin: 18px 0 14px;
+  font-family: "Instrument Serif", serif;
+  font-weight: 400;
+  font-size: clamp(3rem, 10vw, 7rem);
+  line-height: 1;
+  text-shadow: 0 0 60px hsl(var(--a-hue) 90% 60% / 0.6);
+}
+.ww-arrival__p {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: clamp(1.1rem, 2.4vw, 1.5rem);
+  color: hsl(var(--a-hue) 30% 85% / 0.8);
+}
+.ww-arrival__laws { display: flex; gap: 10px; margin-top: 24px; flex-wrap: wrap; justify-content: center; }
+.ww-arrival__laws span {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--a-hue) 80% 75% / 0.3);
+}
+.ww-arrival__foot {
+  position: absolute;
+  bottom: 28px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: hsl(var(--a-hue) 30% 80% / 0.4);
+}
+
+/* ── Keyframes ────────────────────────────────────────────── */
+
+@keyframes ww-breathe {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to   { transform: scale(1.08) translate3d(-1.5%, 1%, 0); }
+}
+@keyframes ww-spin { to { transform: rotate(360deg); } }
+@keyframes ww-ember {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.18); }
+}
+@keyframes ww-marquee { to { transform: translateX(-100%); } }
+@keyframes ww-flicker {
+  0%, 100% { transform: scale(1, 1); }
+  30%      { transform: scale(0.94, 1.06); }
+  60%      { transform: scale(1.04, 0.96); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ww-sky, .ww-aurora, .ww-ticker__track, .ww-mark__hearth, .ww-at__sym, .ww-beacon__flame path { animation: none !important; }
+  .ww-root { transition: none; }
+}
+
+@media (max-width: 640px) {
+  .ww-mark__sub { display: none; }
+  .ww-thesis { top: 11%; }
+  .ww-stage { padding-top: 150px; }
+}

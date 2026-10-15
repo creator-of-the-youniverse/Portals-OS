@@ -34,6 +34,12 @@ import VerificationBanner from "./components/onboarding/VerificationBanner";
 import { PortalBackdrop } from "./components/PortalBackdrop";
 import { claimHandle } from "./services/identityService";
 import { normalizeHandle } from "./types/onboarding";
+import { WelcomeWorld } from "./components/welcome/WelcomeWorld";
+import { ArrivalCeremony } from "./components/ArrivalCeremony";
+import { WelcomeBeacon } from "./components/WelcomeBeacon";
+import { WELCOME_HANDLE } from "./lib/welcomeWorld";
+import { SpatialWorkspace } from "./components/SpatialWorkspace";
+import { type WorkspaceConfig } from "./lib/foundationSynthesis";
 
 function getClaimErrorMessage(errorCode: string | undefined, handle: string): string {
   switch (errorCode) {
@@ -73,6 +79,9 @@ const App: React.FC = () => {
   const [ownerGateChecked, setOwnerGateChecked] = useState<boolean>(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState<boolean>(false);
+  const [showArrivalCeremony, setShowArrivalCeremony] = useState<boolean>(true);
+  const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig | null>(null);
+  const isWelcomeWorld = !isYouniverseRoute || identity?.username === WELCOME_HANDLE;
 
   const handleSuccessfulLogin = useCallback((token: string) => {
     localStorage.setItem("weaver_jwt", token);
@@ -399,6 +408,9 @@ const App: React.FC = () => {
   const showProvisionalDesktop = onboarding.phase === 'EXPLORING' || onboarding.phase === 'VERIFIED';
   const isProvisionalOwner = onboarding.ownerRole === 'PROVISIONAL_OWNER' && !onboarding.isVerified;
 
+  // @welcome is the Foundational World living room of the network
+  const showFoundationalWelcome = (isWelcomeWorld && !subdomainOsActive) || (showWelcome && !showProvisionalDesktop);
+
   return (
     <ClubRadioProvider>
     <AnimatePresence mode="sync">
@@ -528,8 +540,14 @@ const App: React.FC = () => {
             )}
           </AnimatePresence>
         </PortalBackdrop>
-      ) : showWelcome ? (
-        <WelcomeScreen key="welcome" />
+      ) : showFoundationalWelcome ? (
+        <WelcomeWorld
+          key="welcome-world"
+          onBypassToOS={() => {
+            setHasWelcomed(true);
+            setSubdomainOsActive(true);
+          }}
+        />
       ) : (
         <motion.div
           key="main"
@@ -547,32 +565,63 @@ const App: React.FC = () => {
             />
           )}
 
-          <Desktop>
-            {windows.map((win) => {
-              const allApps = getAllApps(projectFolders, weavedWidgets);
-              const appDef = allApps.find((app) => app.id === win.appId);
-              const App = appDef?.component;
-              if (!App) return null;
-              return (
-                <Window key={win.id || `window-${win.appId}-${Math.random()}`} {...win}>
-                  <ErrorBoundary>
-                    <Suspense
-                      fallback={
-                        <div className="h-full flex items-center justify-center bg-[hsl(var(--window-bg-hsl))] text-[hsl(var(--foreground-hsl))]">
-                          <div className="text-center">
-                            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mb-4"></div>
-                            <p>Loading App...</p>
+          {workspaceConfig ? (
+            <SpatialWorkspace config={workspaceConfig}>
+              <Desktop>
+                {windows.map((win) => {
+                  const allApps = getAllApps(projectFolders, weavedWidgets);
+                  const appDef = allApps.find((app) => app.id === win.appId);
+                  const App = appDef?.component;
+                  if (!App) return null;
+                  return (
+                    <Window key={win.id || `window-${win.appId}-${Math.random()}`} {...win}>
+                      <ErrorBoundary>
+                        <Suspense
+                          fallback={
+                            <div className="h-full flex items-center justify-center bg-[hsl(var(--window-bg-hsl))] text-[hsl(var(--foreground-hsl))]">
+                              <div className="text-center">
+                                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mb-4"></div>
+                                <p>Loading App...</p>
+                              </div>
+                            </div>
+                          }
+                        >
+                          <App metadata={win.metadata} />
+                        </Suspense>
+                      </ErrorBoundary>
+                    </Window>
+                  );
+                })}
+              </Desktop>
+            </SpatialWorkspace>
+          ) : (
+            <Desktop>
+              {windows.map((win) => {
+                const allApps = getAllApps(projectFolders, weavedWidgets);
+                const appDef = allApps.find((app) => app.id === win.appId);
+                const App = appDef?.component;
+                if (!App) return null;
+                return (
+                  <Window key={win.id || `window-${win.appId}-${Math.random()}`} {...win}>
+                    <ErrorBoundary>
+                      <Suspense
+                        fallback={
+                          <div className="h-full flex items-center justify-center bg-[hsl(var(--window-bg-hsl))] text-[hsl(var(--foreground-hsl))]">
+                            <div className="text-center">
+                              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mb-4"></div>
+                              <p>Loading App...</p>
+                            </div>
                           </div>
-                        </div>
-                      }
-                    >
-                      <App metadata={win.metadata} />
-                    </Suspense>
-                  </ErrorBoundary>
-                </Window>
-              );
-            })}
-          </Desktop>
+                        }
+                      >
+                        <App metadata={win.metadata} />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </Window>
+                );
+              })}
+            </Desktop>
+          )}
 
           {/* Subdomain Mode Indicator / Public Toggle */}
           {isYouniverseRoute && (
@@ -594,6 +643,21 @@ const App: React.FC = () => {
           <VoiceAssistantOverlay />
           <YouuniverseRadioBar />
           <CheckoutHandler />
+
+          {/* Persistent beacon back to @welcome hearth with Peripheral Awareness & Law Filtering */}
+          <WelcomeBeacon
+            variant="floating"
+            foundationLaws={workspaceConfig?.seed.laws || []}
+          />
+
+          {/* Arrival ceremony when stepping into a personal room */}
+          {showArrivalCeremony && identity?.username && identity.username !== WELCOME_HANDLE && (
+            <ArrivalCeremony
+              handle={identity.username}
+              onDismiss={() => setShowArrivalCeremony(false)}
+              onConfigResolved={(cfg) => setWorkspaceConfig(cfg)}
+            />
+          )}
 
         </motion.div>
       )}
