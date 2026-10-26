@@ -16,6 +16,8 @@ export function createNeonYouniverseIdentityRepository(
           display_name,
           subdomain,
           identity_type,
+          email,
+          plan,
           created_at
         FROM youniverse_identities
         WHERE username = ${username}
@@ -34,6 +36,8 @@ export function createNeonYouniverseIdentityRepository(
         displayName: String(row.display_name),
         subdomain: String(row.subdomain),
         identityType: row.identity_type as YouniverseIdentityRecord["identityType"],
+        email: row.email ? String(row.email) : undefined,
+        plan: row.plan ? String(row.plan) : "free",
         createdAt: new Date(row.created_at as string | Date).toISOString(),
       };
     },
@@ -46,6 +50,8 @@ export function createNeonYouniverseIdentityRepository(
           display_name,
           subdomain,
           identity_type,
+          email,
+          plan,
           created_at
         )
         VALUES (
@@ -54,6 +60,8 @@ export function createNeonYouniverseIdentityRepository(
           ${identity.displayName},
           ${identity.subdomain},
           ${identity.identityType},
+          ${(identity as any).email ?? null},
+          ${(identity as any).plan ?? "free"},
           ${identity.createdAt}
         )
         RETURNING
@@ -62,6 +70,8 @@ export function createNeonYouniverseIdentityRepository(
           display_name,
           subdomain,
           identity_type,
+          email,
+          plan,
           created_at
       `;
 
@@ -73,6 +83,8 @@ export function createNeonYouniverseIdentityRepository(
         displayName: String(row.display_name),
         subdomain: String(row.subdomain),
         identityType: row.identity_type as YouniverseIdentityRecord["identityType"],
+        email: row.email ? String(row.email) : undefined,
+        plan: row.plan ? String(row.plan) : "free",
         createdAt: new Date(row.created_at as string | Date).toISOString(),
       };
     },

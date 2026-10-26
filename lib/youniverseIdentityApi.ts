@@ -1,5 +1,5 @@
 import type { YouniverseIdentityResolver } from "../lib/youniverseIdentityResolution";
-import { normalizeYouniverseHandle } from "../lib/youniverseHandle.js";
+import { normalizeYouniverseHandle } from "./youniverseHandle.ts";
 
 export interface YouniverseIdentityApiDependencies {
   resolver: YouniverseIdentityResolver;

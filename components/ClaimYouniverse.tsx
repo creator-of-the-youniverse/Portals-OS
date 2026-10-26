@@ -217,7 +217,11 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
 
         const data = await res.json();
 
-        if (res.ok && data.status === "created") {
+        if (res.ok && (data.status === "created" || data.status === "pending_verification" || data.success === true)) {
+          if (data.sessionToken) {
+            localStorage.setItem("youniverse_session_token", data.sessionToken);
+            localStorage.setItem("active_youniverse_handle", cleanHandle);
+          }
           setStep("atom");
           return;
         }

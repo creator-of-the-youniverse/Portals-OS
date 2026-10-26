@@ -5,5 +5,8 @@ CREATE TABLE youniverse_identities (
   subdomain TEXT NOT NULL UNIQUE,
   identity_type TEXT NOT NULL
     CHECK (identity_type IN ('person', 'agent')),
+  email TEXT,
+  plan TEXT DEFAULT 'free',
+  stripe_session_id TEXT,
   created_at TIMESTAMPTZ NOT NULL
 );

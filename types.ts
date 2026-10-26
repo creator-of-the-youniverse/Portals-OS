@@ -35,6 +35,10 @@ export type {
   ProjectFolder,
 };
 
+export interface AppProps {
+  window?: WindowInstance & { metadata?: any };
+}
+
 export interface WeavedWidget {
   id: string;
   title: string;

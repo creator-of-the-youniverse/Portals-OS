@@ -152,7 +152,7 @@ export interface ClaimRequest {
 export interface ClaimResponse {
   success: boolean;
   subdomain: string;
-  sessionToken: string;
+  sessionToken?: string;
   error?: string;
 }
 
@@ -164,6 +164,9 @@ export interface VerifyResponse {
   success: boolean;
   handle: string;
   role: OwnerRole;
+  sessionToken?: string;
+  handoffToken?: string;
+  destinationUrl?: string;
   error?: string;
 }
 

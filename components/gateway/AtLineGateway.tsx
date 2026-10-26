@@ -18,9 +18,10 @@ import { checkHandleAvailability } from "../../services/identityService";
 interface AtLineGatewayProps {
   onClaim: (handle: string, email: string) => void;
   isLoading?: boolean;
+  claimError?: string | null;
 }
 
-const AtLineGateway: React.FC<AtLineGatewayProps> = ({ onClaim, isLoading = false }) => {
+const AtLineGateway: React.FC<AtLineGatewayProps> = ({ onClaim, isLoading = false, claimError = null }) => {
   const [handleInput, setHandleInput] = useState("");
   const [email, setEmail] = useState("");
   const [showEmailField, setShowEmailField] = useState(false);
@@ -64,9 +65,13 @@ const AtLineGateway: React.FC<AtLineGatewayProps> = ({ onClaim, isLoading = fals
           } else {
             window.location.href = `https://${normalized}.itsyouonline.com`;
           }
-        } else {
-          // If available, proceed to email collection for claiming
+        } else if (result.status === "available") {
+          // Only proceed to email collection when definitively available
           setShowEmailField(true);
+        } else {
+          // "error" or "invalid" — unlock handle so user can retry or correct
+          // SubdomainAvailability will show the appropriate inline feedback
+          setHandleLocked(false);
         }
       }
     }
@@ -241,6 +246,26 @@ const AtLineGateway: React.FC<AtLineGatewayProps> = ({ onClaim, isLoading = fals
                 </motion.div>
               )}
             </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── CLAIM ERROR FEEDBACK ── */}
+      <AnimatePresence>
+        {claimError && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.3 }}
+            className="flex justify-center mt-4"
+            role="alert"
+          >
+            <div className="flex items-center gap-2 py-1.5 px-4 rounded-full border border-amber-500/20 bg-amber-950/10 backdrop-blur-sm">
+              <span className="text-xs font-mono text-amber-400 tracking-wide">
+                {claimError}
+              </span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

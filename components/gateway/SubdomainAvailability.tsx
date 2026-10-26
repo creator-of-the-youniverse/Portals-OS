@@ -81,12 +81,12 @@ const SubdomainAvailability: React.FC<SubdomainAvailabilityProps> = ({ rawInput 
       bgColor: "bg-amber-950/10",
     },
     error: {
-      icon: <Check className="h-3 w-3" />,
-      text: `${handle}.itsyouonline.com`,
-      color: "text-emerald-400",
-      borderColor: "border-emerald-500/30",
-      bgColor: "bg-emerald-950/20",
-      badge: "AVAILABLE",
+      icon: <X className="h-3 w-3" />,
+      text: "could not check availability — try again",
+      color: "text-amber-400",
+      borderColor: "border-amber-500/20",
+      bgColor: "bg-amber-950/10",
+      badge: "ERROR",
     },
   };
 

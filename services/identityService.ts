@@ -1,21 +1,17 @@
+
 /**
- * @file Identity Service — Client API
+ * Identity Service — Client API
  *
- * Handles claim, availability check, and verification API calls
- * for the First-Touch Onboarding flow.
+ * Handle discovery uses the canonical identity resolver.
+ * Claims use the existing /api/claim endpoint.
+ * Errors never imply availability or successful ownership.
  */
 
 import type {
   ClaimRequest,
-  ClaimResponse,
   VerifyResponse,
+  ClaimResponse,
 } from "../types/onboarding";
-
-const API_BASE = "/api/v1/auth";
-
-// ─────────────────────────────────────────────────────────────
-// Handle Availability
-// ─────────────────────────────────────────────────────────────
 
 export type AvailabilityStatus = "available" | "taken" | "invalid" | "error";
 
@@ -25,11 +21,6 @@ export interface AvailabilityResult {
   subdomain: string;
 }
 
-/**
- * Check if a handle is available for claiming.
- * Falls back gracefully — returns "available" on network errors
- * so the user is never dead-ended during first touch.
- */
 export async function checkHandleAvailability(
   handle: string
 ): Promise<AvailabilityResult> {
@@ -37,100 +28,86 @@ export async function checkHandleAvailability(
 
   try {
     const res = await fetch(
-      `${API_BASE}/availability?handle=${encodeURIComponent(handle)}`
+      `/api/youniverseIdentity?username=${encodeURIComponent(handle)}`
     );
 
-    if (!res.ok) {
-      // Server may not have the endpoint yet — gracefully assume available
-      console.warn("[identityService] Availability check failed, assuming available");
+    if (res.status === 200) {
+      const data = await res.json();
+      return {
+        status: data.status === "found" ? "taken" : "error",
+        handle,
+        subdomain,
+      };
+    }
+
+    if (res.status === 404) {
       return { status: "available", handle, subdomain };
     }
 
-    const data = await res.json();
-    return {
-      status: data.available ? "available" : "taken",
-      handle,
-      subdomain,
-    };
-  } catch (e) {
-    console.warn("[identityService] Network error on availability check:", e);
-    return { status: "available", handle, subdomain };
+    if (res.status === 400) {
+      return { status: "invalid", handle, subdomain };
+    }
+
+    console.warn("[identityService] Availability check failed:", res.status);
+    return { status: "error", handle, subdomain };
+  } catch (error) {
+    console.warn("[identityService] Availability network error:", error);
+    return { status: "error", handle, subdomain };
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Claim Handle
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Claim a handle + email. Creates a provisional tenant record
- * and fires a magic-link verification email in the background.
- *
- * Gracefully degrades: if the API is not yet wired, returns a
- * synthetic success so the frontend flow is never blocked.
- */
 export async function claimHandle(
   payload: ClaimRequest
 ): Promise<ClaimResponse> {
+  const subdomain = `${payload.handle}.itsyouonline.com`;
+
   try {
-    const res = await fetch(`${API_BASE}/claim`, {
+    const res = await fetch("/api/claim", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    if (!res.ok) {
-      if (res.status === 402) {
-        return {
-          success: false,
-          subdomain: `${payload.handle}.itsyouonline.com`,
-          error: 'payment_required',
-        };
-      }
-      if (res.status === 409) {
-        return {
-          success: false,
-          subdomain: `${payload.handle}.itsyouonline.com`,
-          error: 'taken',
-        };
-      }
-      
-      const errorText = await res.text().catch(() => "Unknown error");
-      console.warn("[identityService] Claim failed:", errorText);
-      // Graceful degradation — let the user proceed provisionally if DB is down
+    const data = await res.json().catch(() => ({}));
+
+    if (res.status === 201 && (data.status === "created" || data.status === "pending_verification" || data.success === true)) {
       return {
         success: true,
-        subdomain: `${payload.handle}.itsyouonline.com`,
-        sessionToken: `provisional_${Date.now()}`,
-        error: undefined,
+        subdomain: data.subdomain ?? subdomain,
+        sessionToken: data.sessionToken,
       };
     }
 
-    return await res.json();
-  } catch (e) {
-    console.warn("[identityService] Network error on claim:", e);
-    // Graceful degradation
+    if (res.status === 409 || data.status === "username-taken") {
+      return { success: false, subdomain, error: "taken" };
+    }
+
+    if (res.status === 402 || data.status === "payment_required") {
+      return { success: false, subdomain, error: "payment_required" };
+    }
+
+    console.warn("[identityService] Claim rejected:", res.status, data.status);
     return {
-      success: true,
-      subdomain: `${payload.handle}.itsyouonline.com`,
-      sessionToken: `provisional_${Date.now()}`,
+      success: false,
+      subdomain,
+      error: data.message || data.status || "claim_failed",
     };
+  } catch (error) {
+    console.warn("[identityService] Claim network error:", error);
+    return { success: false, subdomain, error: "network_error" };
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Verify Email (Magic Link)
-// ─────────────────────────────────────────────────────────────
-
 /**
- * Verify a user's email via the magic-link token.
- * Called when the user clicks the link in their inbox.
+ * Email verification remains on its existing route pending backend audit.
  */
 export async function verifyEmail(
   token: string
 ): Promise<VerifyResponse> {
   try {
-    const res = await fetch(`${API_BASE}/verify?token=${encodeURIComponent(token)}`);
+    const res = await fetch(
+      `/api/v1/auth/verify?token=${encodeURIComponent(token)}`
+    );
 
     if (!res.ok) {
       return {
@@ -142,7 +119,7 @@ export async function verifyEmail(
     }
 
     return await res.json();
-  } catch (e) {
+  } catch {
     return {
       success: false,
       handle: "",

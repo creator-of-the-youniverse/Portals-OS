@@ -3,7 +3,6 @@ import "./index.css";
 import { useKernel } from "./store/kernel";
 import Desktop from "./components/Desktop";
 import Window from "./components/Window";
-import WelcomeScreen from "./components/WelcomeScreen";
 import PublicYouniverse from "./components/PublicYouniverse";
 import ClaimYouniverse from "./components/ClaimYouniverse";
 import { useYouniverse } from "./components/YouniverseProvider";
@@ -33,14 +32,13 @@ import OnboardingFlow from "./components/onboarding/OnboardingFlow";
 import VerificationBanner from "./components/onboarding/VerificationBanner";
 import { PortalBackdrop } from "./components/PortalBackdrop";
 import { claimHandle } from "./services/identityService";
-import { normalizeHandle } from "./types/onboarding";
+import { OwnerLoginModal } from "./components/gateway/OwnerLoginModal";
+import ArrivalCeremony from "./components/ArrivalCeremony";
 
 const App: React.FC = () => {
   const windows = useKernel((state) => state.windows);
-  const hasWelcomed = useKernel((state) => state.hasWelcomed);
   const { identity } = useYouniverse();
   const isYouniverseRoute = identity?.kind === "identity";
-  const setHasWelcomed = useKernel((state) => state.setHasWelcomed);
   const projectFolders = useKernel((state) => state.projectFolders);
   const weavedWidgets = useKernel((state) => state.weavedWidgets);
 
@@ -50,6 +48,29 @@ const App: React.FC = () => {
   // Determined by a server-verified ownership check — NOT a client-side flag.
   const [subdomainOsActive, setSubdomainOsActive] = useState<boolean>(false);
   const [ownerGateChecked, setOwnerGateChecked] = useState<boolean>(false);
+  const [showArrivalCeremony, setShowArrivalCeremony] = useState<boolean>(true);
+  const [handoffPending, setHandoffPending] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return /(?:^|#|&)handoff_token=/.test(window.location.hash);
+  });
+  const handoffReconciledRef = useRef<boolean>(false);
+
+  const handleVerifiedArrival = useCallback((sessionToken: string) => {
+    if (handoffReconciledRef.current) return;
+    handoffReconciledRef.current = true;
+    setHandoffPending(false);
+    setSubdomainOsActive(true);
+    setOwnerGateChecked(true);
+  }, []);
+
+  const handleHandoffError = useCallback((err: any) => {
+    if (handoffReconciledRef.current) return;
+    handoffReconciledRef.current = true;
+    console.warn("[OwnerGate] Handoff exchange failed:", err);
+    setHandoffPending(false);
+    setSubdomainOsActive(false);
+    setOwnerGateChecked(true);
+  }, []);
 
   useEffect(() => {
     if (!identity?.username) return;
@@ -57,11 +78,18 @@ const App: React.FC = () => {
     const handle = identity.username;
     const params = new URLSearchParams(window.location.search);
 
-    // Fast path: explicit ?mode=os or ?enter=true query params skip the gate check
-    // (still requires a valid session to load protected data, so this is fine UX-wise).
-    if (params.get("mode") === "os" || params.get("enter") === "true") {
+    // Dev-only fast path: explicit ?mode=os or ?enter=true query params skip the gate
+    // check on localhost. NEVER skip on production domains — that would be a security
+    // bypass allowing any visitor to access the private owner OS.
+    const hostname = window.location.hostname;
+    const isLocalDev = hostname === "localhost" || hostname === "127.0.0.1";
+    if (isLocalDev && (params.get("mode") === "os" || params.get("enter") === "true")) {
       setSubdomainOsActive(true);
       setOwnerGateChecked(true);
+      return;
+    }
+
+    if (handoffPending) {
       return;
     }
 
@@ -113,7 +141,7 @@ const App: React.FC = () => {
     };
 
     verifyOwnership();
-  }, [identity?.username]);
+  }, [identity?.username, handoffPending]);
 
   // Load custom sovereign widgets from NotNotes when OS boots
   useEffect(() => {
@@ -140,12 +168,16 @@ const App: React.FC = () => {
     }
   }, [subdomainOsActive]);
 
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
   const enterSubdomainOs = useCallback(() => {
+    setIsLoginModalOpen(true);
+  }, []);
+
+  const handleLoginSuccess = useCallback((_token: string) => {
+    setIsLoginModalOpen(false);
     setSubdomainOsActive(true);
-    if (identity?.username) {
-      localStorage.setItem(`youniverse_os_active_${identity.username}`, "true");
-    }
-  }, [identity?.username]);
+  }, []);
 
   const viewPublicShowcase = useCallback(() => {
     setSubdomainOsActive(false);
@@ -272,10 +304,13 @@ const App: React.FC = () => {
   const completeOnboardingDialogue = useKernel((state) => state.completeOnboardingDialogue);
   const upgradeToVerified = useKernel((state) => state.upgradeToVerified);
   const [isClaimLoading, setIsClaimLoading] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   // Handle gateway claim submission
   const handleGatewayClaim = useCallback(async (handle: string, email: string) => {
     setIsClaimLoading(true);
+    setClaimError(null);
     setOnboardingHandle(handle);
     setOnboardingEmail(email);
     setOnboardingPhase('CLAIMING');
@@ -284,10 +319,14 @@ const App: React.FC = () => {
       const result = await claimHandle({ handle, email });
 
       if (result.success) {
-        // Store session locally
         localStorage.setItem('active_youniverse_handle', handle);
-        localStorage.setItem('youniverse_session_token', result.sessionToken);
         localStorage.setItem('youniverse_owner_email', email);
+        if (result.subdomain) {
+          localStorage.setItem('active_youniverse_subdomain', result.subdomain);
+        }
+        if (result.sessionToken) {
+          localStorage.setItem('youniverse_session_token', result.sessionToken);
+        }
 
         // Transition to portal animation then dialogue
         setOwnerRole('PROVISIONAL_OWNER');
@@ -297,25 +336,34 @@ const App: React.FC = () => {
         // Brief portal transition animation, then start dialogue
         setTimeout(() => {
           startOnboardingDialogue();
-          // Also mark hasWelcomed so the old WelcomeScreen doesn't interfere
-          setHasWelcomed(true);
         }, 1500);
       } else if (result.error === 'payment_required') {
         // Email has already claimed a free Youniverse — redirect to Pay Screen
         setIsClaimLoading(false);
         window.location.href = `/?claim=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}`;
         return;
+      } else {
+        // Claim failed (taken, network error, etc.) — do NOT grant owner access.
+        console.warn('[ONBOARDING] Claim failed:', result.error);
+        if (result.error === 'taken' || result.error === 'username-taken') {
+          setClaimError("That handle has already been claimed. Please choose another.");
+        } else if (result.error === 'network_error') {
+          setClaimError("We couldn\u2019t connect to the service. Please try again.");
+        } else {
+          setClaimError("We couldn\u2019t claim that handle. Please try again.");
+        }
+        // Reset gateway so user can try a different handle
+        setOnboardingPhase('GATEWAY');
       }
     } catch (e) {
-      console.warn('[ONBOARDING] Claim error, proceeding anyway:', e);
-      setOwnerRole('PROVISIONAL_OWNER');
-      playRandomWelcomeMessage();
-      startOnboardingDialogue();
-      setHasWelcomed(true);
+      // Claim threw unexpectedly — do NOT grant owner access on failure.
+      console.error('[ONBOARDING] Unexpected claim error:', e);
+      setClaimError("We couldn\u2019t connect to the service. Please try again.");
+      setOnboardingPhase('GATEWAY');
     } finally {
       setIsClaimLoading(false);
     }
-  }, [setOnboardingHandle, setOnboardingEmail, setOnboardingPhase, setOwnerRole, startOnboardingDialogue, setHasWelcomed]);
+  }, [setOnboardingHandle, setOnboardingEmail, setOnboardingPhase, setOwnerRole, startOnboardingDialogue]);
 
   // Handle onboarding dialogue completion
   const handleOnboardingComplete = useCallback(() => {
@@ -326,17 +374,52 @@ const App: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const verifyToken = params.get('verify_token');
-    if (verifyToken) {
-      import('./services/identityService').then(({ verifyEmail }) => {
-        verifyEmail(verifyToken).then((result) => {
-          if (result.success) {
-            upgradeToVerified();
-            // Clean the URL
-            window.history.replaceState({}, '', window.location.pathname);
+    if (!verifyToken) return;
+
+    // Clean verify_token from URL while preserving other params and hash.
+    const cleanUrl = () => {
+      const cleaned = new URLSearchParams(window.location.search);
+      cleaned.delete('verify_token');
+      const qs = cleaned.toString();
+      const newUrl =
+        window.location.pathname +
+        (qs ? `?${qs}` : '') +
+        window.location.hash;
+      window.history.replaceState({}, '', newUrl);
+    };
+
+    import('./services/identityService')
+      .then(({ verifyEmail }) => verifyEmail(verifyToken))
+      .then((result) => {
+        if (result.success) {
+          if (result.sessionToken) {
+            localStorage.setItem('youniverse_session_token', result.sessionToken);
+            if (result.handle) {
+              localStorage.setItem(`youniverse_os_active_${result.handle}`, 'true');
+            }
           }
-        });
+          upgradeToVerified();
+          setSubdomainOsActive(true);
+          setVerificationError(null);
+
+          if (result.destinationUrl) {
+            cleanUrl();
+            window.location.href = result.destinationUrl;
+            return;
+          }
+        } else {
+          setVerificationError(
+            "We couldn\u2019t verify your email. Verification is not complete. Please try again later."
+          );
+        }
+        cleanUrl();
+      })
+      .catch(() => {
+        setVerificationError(
+          "We couldn\u2019t verify your email. Verification is not complete. Please try again later."
+        );
+        cleanUrl();
       });
-    }
   }, [upgradeToVerified]);
 
   // ────────────────────────────────────────────────────────────
@@ -346,12 +429,16 @@ const App: React.FC = () => {
 
   // On a Youniverse subdomain, hold rendering until the async owner-gate check
   // resolves so we never flash the public view while the fetch is in-flight.
-  const gateStillPending = isYouniverseRoute && !ownerGateChecked;
-  const showPublicYouniverse = isYouniverseRoute && ownerGateChecked && !subdomainOsActive;
-  const showWelcome = !isYouniverseRoute && !isClaimRoute && !hasWelcomed;
-
+  const gateStillPending = isYouniverseRoute && (!ownerGateChecked || handoffPending);
+  const showPublicYouniverse = isYouniverseRoute && ownerGateChecked && !handoffPending && !subdomainOsActive;
   // First-Touch Onboarding overrides
-  const showGateway = showWelcome && onboarding.phase === 'GATEWAY';
+  const showGateway =
+    !isYouniverseRoute &&
+    !isClaimRoute &&
+    !subdomainOsActive &&
+    (onboarding.phase === 'GATEWAY' ||
+      onboarding.phase === 'HANDLE_ENTERED' ||
+      onboarding.phase === 'CLAIMING');
   const showPortalTransition = onboarding.phase === 'PORTAL_TRANSITION';
   const showOnboardingDialogue = onboarding.phase === 'DIALOGUE';
   const showProvisionalDesktop = onboarding.phase === 'EXPLORING' || onboarding.phase === 'VERIFIED';
@@ -371,7 +458,7 @@ const App: React.FC = () => {
       ) : showClaimRoute ? (
         <ClaimYouniverse key="claim" />
       ) : showPublicYouniverse ? (
-        <PublicYouniverse key="youniverse" onEnterOs={enterSubdomainOs} />
+        <PublicYouniverse key="youniverse" handle={identity?.username || ''} onOpenLoginModal={enterSubdomainOs} />
       ) : showGateway || showPortalTransition || showOnboardingDialogue ? (
         /* ── FIRST-TOUCH ONBOARDING WRAPPED IN PORTAL ── */
         <PortalBackdrop key="onboarding-portal">
@@ -386,6 +473,7 @@ const App: React.FC = () => {
                 <AtLineGateway
                   onClaim={handleGatewayClaim}
                   isLoading={isClaimLoading}
+                  claimError={claimError}
                 />
                 {/* Brand watermark */}
                 <motion.p
@@ -445,9 +533,41 @@ const App: React.FC = () => {
             )}
           </AnimatePresence>
         </PortalBackdrop>
-      ) : showWelcome ? (
-        <WelcomeScreen key="welcome" />
-      ) : (
+      ) : showProvisionalDesktop ? (
+        <PortalBackdrop key="provisional-success">
+          <div className="absolute inset-0 flex flex-col items-center justify-center relative z-20">
+            {isProvisionalOwner ? (
+              <VerificationBanner
+                email={onboarding.email}
+                handle={onboarding.handle}
+                isVerified={onboarding.isVerified}
+                onDismiss={() => setOnboardingPhase('GATEWAY')}
+              />
+            ) : (
+              <div className="text-emerald-400 font-mono mb-4 text-center mt-8">
+                Email verified successfully!
+              </div>
+            )}
+            <div className="text-center mt-16 font-mono text-zinc-400 text-sm">
+              <p>Your Youniverse is initializing.</p>
+              <button
+                onClick={() => setOnboardingPhase('GATEWAY')}
+                className="mt-4 px-4 py-2 border border-zinc-700 rounded-md hover:bg-zinc-800 transition-colors"
+              >
+                Return to Gateway
+              </button>
+              {!isProvisionalOwner && onboarding.handle && (
+                <a
+                  href={`https://${onboarding.handle}.itsyouonline.com`}
+                  className="block mt-4 text-cyan-400 hover:underline"
+                >
+                  Go to your Youniverse →
+                </a>
+              )}
+            </div>
+          </div>
+        </PortalBackdrop>
+      ) : subdomainOsActive ? (
         <motion.div
           key="main"
           initial={{ opacity: 0 }}
@@ -455,15 +575,6 @@ const App: React.FC = () => {
           transition={{ duration: 1.5 }}
           className="fixed inset-0 overflow-hidden bg-black font-sans"
         >
-          {/* Verification Banner for provisional owners */}
-          {isProvisionalOwner && (
-            <VerificationBanner
-              email={onboarding.email}
-              handle={onboarding.handle}
-              isVerified={onboarding.isVerified}
-            />
-          )}
-
           <Desktop>
             {windows.map((win) => {
               const allApps = getAllApps(projectFolders, weavedWidgets);
@@ -513,6 +624,46 @@ const App: React.FC = () => {
           <CheckoutHandler />
 
         </motion.div>
+      ) : null}
+      {/* Verification failure banner — rendered outside the routing ternary
+          so it is visible regardless of current route. */}
+      <AnimatePresence>
+        {verificationError && (
+          <motion.div
+            key="verification-error"
+            role="alert"
+            initial={{ opacity: 0, y: -32 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -32 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-center gap-3 px-4 py-2.5 bg-amber-950/90 border-b border-amber-500/20 backdrop-blur-md"
+          >
+            <span className="text-xs font-mono tracking-wide text-amber-200">
+              {verificationError}
+            </span>
+            <button
+              onClick={() => setVerificationError(null)}
+              className="ml-2 p-1 rounded-md hover:bg-white/10 transition-colors text-amber-400/40 hover:text-amber-300"
+              aria-label="Dismiss verification warning"
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <OwnerLoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        handle={identity?.username || ''}
+        onLoginSuccess={handleLoginSuccess}
+      />
+      {showArrivalCeremony && identity?.username && (subdomainOsActive || handoffPending) && (
+        <ArrivalCeremony
+          handle={identity.username}
+          onDismiss={() => setShowArrivalCeremony(false)}
+          onVerified={handleVerifiedArrival}
+          onError={handleHandoffError}
+        />
       )}
       <Analytics />
       <PwaInstallPrompt />
