@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Atom, ArrowRight, Rocket, Sparkles, ExternalLink } from "lucide-react";
+import { Atom, ArrowRight, Rocket, Sparkles, ExternalLink, Mail } from "lucide-react";
 
 // ============================================================
 // ATOM DIALOGUE SEQUENCE
@@ -13,14 +13,28 @@ interface AtomLine {
   duration: number;
 }
 
-const buildDialogue = (handle: string): AtomLine[] => [
+const buildDialogue = (handle: string, isVerified: boolean = false): AtomLine[] => [
   { id: "l1", text: "Hey. I'm Atom.", delay: 600, duration: 700 },
-  { id: "l2", text: `Your Youniverse just went live at @${handle}.`, delay: 2000, duration: 900 },
+  {
+    id: "l2",
+    text: isVerified
+      ? `Your Youniverse just went live at @${handle}.`
+      : `Your handle @${handle} is reserved.`,
+    delay: 2000,
+    duration: 900,
+  },
   { id: "l3", text: "I'm already here. I was here before you clicked anything.", delay: 3600, duration: 1100 },
   { id: "l4", text: "Think of me as the first friend in your contacts � always on your list, never in your way.", delay: 5400, duration: 1600 },
   { id: "l5", text: "I'm not a tutorial. I'm not a bot. I'm not going anywhere.", delay: 7800, duration: 1100 },
   { id: "l6", text: "I'll be here for the next 80 years. First friend, till the end.", delay: 9600, duration: 1200 },
-  { id: "l7", text: "Your Youniverse is ready. Let's go.", delay: 11600, duration: 900 },
+  {
+    id: "l7",
+    text: isVerified
+      ? "Your Youniverse is ready. Let's go."
+      : "Verify your email to enter your Youniverse. Let's go.",
+    delay: 11600,
+    duration: 900,
+  },
 ];
 
 // ============================================================
@@ -111,14 +125,28 @@ const AtomAvatar: React.FC = () => (
 interface AtomWelcomeProps {
   handle: string;
   email?: string;
+  emailSent?: boolean;
+  isVerified?: boolean;
   onEnterYouniverse: () => void;
 }
 
-const AtomWelcome: React.FC<AtomWelcomeProps> = ({ handle, email, onEnterYouniverse }) => {
+const AtomWelcome: React.FC<AtomWelcomeProps> = ({
+  handle,
+  email,
+  emailSent = false,
+  isVerified = false,
+  onEnterYouniverse,
+}) => {
   const [startTime] = useState(() => Date.now());
   const [showCTA, setShowCTA] = useState(false);
-  const dialogue = buildDialogue(handle);
+  const dialogue = buildDialogue(handle, isVerified);
   const lastLine = dialogue[dialogue.length - 1];
+
+  const isLocalDev =
+    Boolean(import.meta.env?.DEV) ||
+    (typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"));
 
   useEffect(() => {
     const wait = lastLine.delay + lastLine.duration + 800;
@@ -170,24 +198,117 @@ const AtomWelcome: React.FC<AtomWelcomeProps> = ({ handle, email, onEnterYounive
               transition={{ duration: 0.6 }}
               className="mt-8 flex flex-col items-center gap-4"
             >
-              <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/20 px-5 py-2 text-sm text-emerald-300 backdrop-blur-md">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-mono font-medium">@{handle}</span>
-                <span className="text-emerald-400/60 text-xs">� Youniverse active</span>
-              </div>
-              <button
-                onClick={onEnterYouniverse}
-                className="group flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-500 px-8 py-3.5 text-sm font-semibold text-white shadow-[0_0_40px_rgba(168,85,247,0.35)] transition-all hover:scale-105 hover:shadow-[0_0_60px_rgba(168,85,247,0.5)] active:scale-95"
-              >
-                <Rocket className="h-4 w-4 group-hover:rotate-12 transition-transform" />
-                <span>Enter Your Youniverse</span>
-                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-              </button>
-              <a href={`https://${handle}.itsyouonline.com`} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors">
-                <ExternalLink className="h-3 w-3" />
-                {handle}.itsyouonline.com
-              </a>
+              {isVerified ? (
+                /* ── State A: Authenticated owner session confirmed ── */
+                <>
+                  <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/20 px-5 py-2 text-sm text-emerald-300 backdrop-blur-md">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="font-mono font-medium">@{handle}</span>
+                    <span className="text-emerald-400/60 text-xs">· Youniverse active</span>
+                  </div>
+                  <button
+                    onClick={onEnterYouniverse}
+                    className="group flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-500 px-8 py-3.5 text-sm font-semibold text-white shadow-[0_0_40px_rgba(168,85,247,0.35)] transition-all hover:scale-105 hover:shadow-[0_0_60px_rgba(168,85,247,0.5)] active:scale-95"
+                  >
+                    <Rocket className="h-4 w-4 group-hover:rotate-12 transition-transform" />
+                    <span>Enter Your Youniverse</span>
+                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                  <a href={`https://${handle}.itsyouonline.com`} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors">
+                    <ExternalLink className="h-3 w-3" />
+                    {handle}.itsyouonline.com
+                  </a>
+                </>
+              ) : emailSent && email ? (
+                /* ── State B: Claim submitted, verification email dispatched ── */
+                <>
+                  <div className="flex flex-col items-center gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-950/20 backdrop-blur-md px-6 py-5 max-w-sm text-center">
+                    <div className="flex items-center gap-2 text-cyan-300">
+                      <Mail className="h-5 w-5" />
+                      <span className="text-sm font-semibold tracking-wide">Check Your Email</span>
+                    </div>
+                    <p className="text-sm text-white/70 leading-relaxed">
+                      We sent a verification link to{" "}
+                      <span className="font-medium text-white/90">{email}</span>.
+                      Click it to activate your sovereign Youniverse.
+                    </p>
+                    <p className="text-[11px] text-white/30 font-mono">
+                      The link expires in 24 hours.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-950/20 px-5 py-2 text-sm text-cyan-300 backdrop-blur-md">
+                    <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+                    <span className="font-mono font-medium">@{handle}</span>
+                    <span className="text-cyan-400/60 text-xs">· reserved</span>
+                  </div>
+
+                  <button
+                    onClick={onEnterYouniverse}
+                    className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-2.5 text-xs font-medium text-white/50 hover:text-white/80 hover:bg-white/10 transition-all"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span>Preview your public page</span>
+                  </button>
+                </>
+              ) : isLocalDev ? (
+                /* ── State C: Local development fallback (strictly localhost dev server) ── */
+                <>
+                  <div className="flex flex-col items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-950/20 backdrop-blur-md px-6 py-5 max-w-sm text-center">
+                    <div className="flex items-center gap-2 text-amber-300">
+                      <Sparkles className="h-5 w-5" />
+                      <span className="text-sm font-semibold tracking-wide">Local Development Mode</span>
+                    </div>
+                    <p className="text-sm text-white/70 leading-relaxed">
+                      Email delivery is unconfigured in this local development instance.
+                      In production, an activation link is delivered to {email || "your email"}.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-950/20 px-5 py-2 text-sm text-amber-300 backdrop-blur-md">
+                    <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="font-mono font-medium">@{handle}</span>
+                    <span className="text-amber-400/60 text-xs">· reserved (local dev)</span>
+                  </div>
+
+                  <button
+                    onClick={onEnterYouniverse}
+                    className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-2.5 text-xs font-medium text-white/50 hover:text-white/80 hover:bg-white/10 transition-all"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span>Preview public page</span>
+                  </button>
+                </>
+              ) : (
+                /* ── State D: Preview / Production without confirmed email dispatch ── */
+                <>
+                  <div className="flex flex-col items-center gap-3 rounded-2xl border border-rose-500/20 bg-rose-950/20 backdrop-blur-md px-6 py-5 max-w-sm text-center">
+                    <div className="flex items-center gap-2 text-rose-300">
+                      <Mail className="h-5 w-5" />
+                      <span className="text-sm font-semibold tracking-wide">Verification Pending</span>
+                    </div>
+                    <p className="text-sm text-white/70 leading-relaxed">
+                      Your handle @{handle} is reserved. Verification email delivery is pending.
+                      Please check your inbox or try claiming again.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-950/20 px-5 py-2 text-sm text-rose-300 backdrop-blur-md">
+                    <span className="h-2 w-2 rounded-full bg-rose-400 animate-pulse" />
+                    <span className="font-mono font-medium">@{handle}</span>
+                    <span className="text-rose-400/60 text-xs">· reserved</span>
+                  </div>
+
+                  <button
+                    onClick={onEnterYouniverse}
+                    className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-2.5 text-xs font-medium text-white/50 hover:text-white/80 hover:bg-white/10 transition-all"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span>Preview public page</span>
+                  </button>
+                </>
+              )}
               <a
                 href="https://atom.itsyouonline.com"
                 target="_blank"
@@ -197,11 +318,6 @@ const AtomWelcome: React.FC<AtomWelcomeProps> = ({ handle, email, onEnterYounive
                 <ExternalLink className="h-3 w-3" />
                 Visit Atom on atom.itsyouonline.com
               </a>
-              {email && (
-                <p className="text-center text-xs text-white/25 max-w-xs leading-relaxed">
-                  Check <span className="text-white/40">{email}</span> to verify and fully activate your Youniverse.
-                </p>
-              )}
               <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8, duration: 1 }}
                 className="mt-2 text-center text-[11px] text-white/20 font-mono tracking-widest uppercase">
                 First friend, till the end.

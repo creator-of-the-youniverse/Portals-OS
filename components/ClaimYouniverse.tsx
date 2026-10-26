@@ -173,6 +173,7 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
   const [step, setStep] = useState<"claim" | "email" | "atom" | "confirm">("claim");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
 
   // Read ?handle= (prod) or ?claim= (dev) from URL params
   useEffect(() => {
@@ -218,10 +219,8 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
         const data = await res.json();
 
         if (res.ok && (data.status === "created" || data.status === "pending_verification" || data.success === true)) {
-          if (data.sessionToken) {
-            localStorage.setItem("youniverse_session_token", data.sessionToken);
-            localStorage.setItem("active_youniverse_handle", cleanHandle);
-          }
+          localStorage.setItem("active_youniverse_handle", cleanHandle);
+          setEmailSent(data.emailSent === true);
           setStep("atom");
           return;
         }
@@ -280,6 +279,8 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
       <AtomWelcome
         handle={cleanHandle}
         email={email}
+        emailSent={emailSent}
+        isVerified={false}
         onEnterYouniverse={() => {
           const currentHost = window.location.hostname;
           if (
