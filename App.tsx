@@ -34,6 +34,11 @@ import { PortalBackdrop } from "./components/PortalBackdrop";
 import { claimHandle } from "./services/identityService";
 import { OwnerLoginModal } from "./components/gateway/OwnerLoginModal";
 import ArrivalCeremony from "./components/ArrivalCeremony";
+import {
+  FoundingAngelsOffer,
+  FoundingAngelsSuccess,
+  FoundingAngelsCancel,
+} from "./components/founding-angels";
 
 const App: React.FC = () => {
   const windows = useKernel((state) => state.windows);
@@ -54,6 +59,20 @@ const App: React.FC = () => {
     return /(?:^|#|&)handoff_token=/.test(window.location.hash);
   });
   const handoffReconciledRef = useRef<boolean>(false);
+
+  // Client-side route tracking for direct path navigation
+  const [currentPath, setCurrentPath] = useState<string>(() => {
+    if (typeof window === "undefined") return "/";
+    return window.location.pathname.toLowerCase().replace(/\/+$/, "") || "/";
+  });
+
+  useEffect(() => {
+    const onPopState = () => {
+      setCurrentPath(window.location.pathname.toLowerCase().replace(/\/+$/, "") || "/");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   const handleVerifiedArrival = useCallback((sessionToken: string) => {
     if (handoffReconciledRef.current) return;
@@ -425,6 +444,14 @@ const App: React.FC = () => {
   // ────────────────────────────────────────────────────────────
   // ROUTING LOGIC
   // ────────────────────────────────────────────────────────────
+  const isFoundingAngelsSuccess = currentPath === "/founding-angels/success";
+  const isFoundingAngelsCancel =
+    currentPath === "/founding-angels/cancel" ||
+    (currentPath === "/founding-angels" &&
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("canceled") === "true");
+  const isFoundingAngelsOffer = currentPath === "/founding-angels" && !isFoundingAngelsCancel;
+
   const showClaimRoute = isClaimRoute;
 
   // On a Youniverse subdomain, hold rendering until the async owner-gate check
@@ -447,8 +474,32 @@ const App: React.FC = () => {
   return (
     <ClubRadioProvider>
     <AnimatePresence mode="sync">
-      {/* Owner gate in-flight — render nothing while async check resolves */}
-      {gateStillPending ? (
+      {/* Founding Angels dedicated routes */}
+      {isFoundingAngelsSuccess ? (
+        <FoundingAngelsSuccess
+          key="fa-success"
+          onNavigate={(path: string) => {
+            window.history.pushState({}, "", path);
+            setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
+          }}
+        />
+      ) : isFoundingAngelsCancel ? (
+        <FoundingAngelsCancel
+          key="fa-cancel"
+          onNavigate={(path: string) => {
+            window.history.pushState({}, "", path);
+            setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
+          }}
+        />
+      ) : isFoundingAngelsOffer ? (
+        <FoundingAngelsOffer
+          key="fa-offer"
+          onNavigate={(path: string) => {
+            window.history.pushState({}, "", path);
+            setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
+          }}
+        />
+      ) : gateStillPending ? (
         <motion.div
           key="gate-loading"
           initial={{ opacity: 0 }}
@@ -625,7 +676,8 @@ const App: React.FC = () => {
 
         </motion.div>
       ) : null}
-      {/* Verification failure banner — rendered outside the routing ternary
+    </AnimatePresence>
+      {/* Verification failure banner — rendered outside the routing AnimatePresence
           so it is visible regardless of current route. */}
       <AnimatePresence>
         {verificationError && (
@@ -667,7 +719,6 @@ const App: React.FC = () => {
       )}
       <Analytics />
       <PwaInstallPrompt />
-    </AnimatePresence>
     </ClubRadioProvider>
   );
 };

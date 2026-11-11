@@ -8,7 +8,9 @@
     "server": "node server.js",
     "start": "npm run server & npm run dev",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "package:vercel": "node scripts/sync-vercel-typescript-runtime.mjs"
   },
   "dependencies": {
     "@21st-extension/react": "^0.5.14",
