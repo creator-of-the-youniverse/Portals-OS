@@ -718,7 +718,9 @@ const App: React.FC = () => {
         />
       )}
       <Analytics />
-      <PwaInstallPrompt />
+      {!(isFoundingAngelsSuccess || isFoundingAngelsCancel || isFoundingAngelsOffer) && (
+        <PwaInstallPrompt />
+      )}
     </ClubRadioProvider>
   );
 };
