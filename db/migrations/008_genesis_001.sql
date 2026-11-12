@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 008: Genesis 001 — First Person of The Youniverse
+-- Migration 008: Genesis 001 — First Person in The Youniverse
 --
 -- Tables:
 --   - public.genesis_program_state
@@ -36,9 +36,9 @@ $$;
 CREATE TABLE IF NOT EXISTS public.genesis_program_state (
   program_key TEXT PRIMARY KEY
     CONSTRAINT genesis_program_state_key_check CHECK (program_key = 'genesis_001'),
-  official_title TEXT NOT NULL DEFAULT 'FIRST PERSON OF THE YOUNIVERSE'
+  official_title TEXT NOT NULL DEFAULT 'FIRST PERSON IN THE YOUNIVERSE'
     CONSTRAINT genesis_program_state_title_check CHECK (
-      official_title = 'FIRST PERSON OF THE YOUNIVERSE'
+      official_title = 'FIRST PERSON IN THE YOUNIVERSE'
     ),
   official_designation TEXT NOT NULL DEFAULT 'GENESIS 001'
     CONSTRAINT genesis_program_state_designation_check CHECK (
@@ -157,9 +157,9 @@ CREATE TABLE IF NOT EXISTS public.genesis_awards (
       REFERENCES public.youniverse_identities(identity_id) ON DELETE RESTRICT,
   awarded_username TEXT NOT NULL
     CONSTRAINT genesis_awards_username_not_blank CHECK (btrim(awarded_username) <> ''),
-  official_title TEXT NOT NULL DEFAULT 'FIRST PERSON OF THE YOUNIVERSE'
+  official_title TEXT NOT NULL DEFAULT 'FIRST PERSON IN THE YOUNIVERSE'
     CONSTRAINT genesis_awards_title_check CHECK (
-      official_title = 'FIRST PERSON OF THE YOUNIVERSE'
+      official_title = 'FIRST PERSON IN THE YOUNIVERSE'
     ),
   award_label TEXT NOT NULL DEFAULT 'GENESIS 001'
     CONSTRAINT genesis_awards_label_check CHECK (award_label = 'GENESIS 001'),

@@ -51,7 +51,7 @@ export const GenesisBadge: React.FC<GenesisBadgeProps> = ({
                 </span>
               </div>
               <p className="text-sm font-bold text-white tracking-wide mt-0.5">
-                FIRST PERSON OF THE YOUNIVERSE
+                FIRST PERSON IN THE YOUNIVERSE
               </p>
               {handle && (
                 <p className="text-xs font-mono text-white/55 mt-0.5">
@@ -77,7 +77,7 @@ export const GenesisBadge: React.FC<GenesisBadgeProps> = ({
     <Tag
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      title="GENESIS 001 — FIRST PERSON OF THE YOUNIVERSE"
+      title="GENESIS 001 — FIRST PERSON IN THE YOUNIVERSE"
       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#090c14]/90 border border-amber-300/40 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.18)] ${
         onClick ? "cursor-pointer hover:border-amber-200/70 hover:brightness-110 transition-all" : ""
       } ${className}`}

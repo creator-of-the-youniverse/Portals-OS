@@ -19,7 +19,7 @@ const PaidTierApp: React.FC = () => {
                             </div>
                             <div>
                                 <p className="text-xs font-mono font-bold tracking-[0.2em] uppercase text-amber-300">
-                                    GENESIS 001 · FIRST PERSON OF THE YOUNIVERSE
+                                    GENESIS 001 · FIRST PERSON IN THE YOUNIVERSE
                                 </p>
                                 <p className="text-sm font-semibold text-white">
                                     Lifetime first-party Portals OS entitlement is permanently active on this Youniverse.

@@ -80,7 +80,7 @@ test("PG18: 1 & 2. Migration 008 applies cleanly and enforces program state sing
       const prog = await client.query(`SELECT * FROM ${schema}.genesis_program_state`);
       assert.strictEqual(prog.rows.length, 1);
       assert.strictEqual(prog.rows[0].program_key, "genesis_001");
-      assert.strictEqual(prog.rows[0].official_title, "FIRST PERSON OF THE YOUNIVERSE");
+      assert.strictEqual(prog.rows[0].official_title, "FIRST PERSON IN THE YOUNIVERSE");
       assert.strictEqual(prog.rows[0].official_designation, "GENESIS 001");
 
       // Immutability checks
@@ -174,7 +174,7 @@ test("PG18: 4. Guarded rollback succeeds when empty and refuses when award exist
         INSERT INTO ${schema}.email_verification_tokens (id, identity_id, token_hash, expires_at, consumed_at)
         VALUES ('tok_rb_1', 'id_rb_1', 'hash1', NOW() + INTERVAL '1 hour', NOW());
         INSERT INTO ${schema}.genesis_awards (award_slot, identity_id, verification_token_id, awarded_username, official_title, award_label, source_environment)
-        VALUES ('genesis_001', 'id_rb_1', 'tok_rb_1', 'rbwinner', 'FIRST PERSON OF THE YOUNIVERSE', 'GENESIS 001', 'production');
+        VALUES ('genesis_001', 'id_rb_1', 'tok_rb_1', 'rbwinner', 'FIRST PERSON IN THE YOUNIVERSE', 'GENESIS 001', 'production');
       `);
 
       // Attempt guarded rollback: must fail
@@ -271,7 +271,7 @@ test("PG18: 5. Real concurrent verification race: exactly 1 wins Genesis 001 and
           `INSERT INTO ${schema}.genesis_awards (
              award_slot, identity_id, verification_token_id, awarded_username, official_title, award_label, source_environment
            ) VALUES (
-             'genesis_001', $1, $2, $3, 'FIRST PERSON OF THE YOUNIVERSE', 'GENESIS 001', 'production'
+             'genesis_001', $1, $2, $3, 'FIRST PERSON IN THE YOUNIVERSE', 'GENESIS 001', 'production'
            ) ON CONFLICT (award_slot) DO NOTHING
            RETURNING identity_id`,
           [c.id, c.tokenId, c.username]
@@ -360,7 +360,7 @@ test("PG18: 6. Award identity and timestamp immutability triggers in PostgreSQL"
         INSERT INTO ${schema}.email_verification_tokens (id, identity_id, token_hash, expires_at, consumed_at)
         VALUES ('tok_im_1', 'id_im_1', 'hash_im', NOW() + INTERVAL '1 hour', NOW());
         INSERT INTO ${schema}.genesis_awards (award_slot, identity_id, verification_token_id, awarded_username, official_title, award_label, source_environment)
-        VALUES ('genesis_001', 'id_im_1', 'tok_im_1', 'immutableuser', 'FIRST PERSON OF THE YOUNIVERSE', 'GENESIS 001', 'production');
+        VALUES ('genesis_001', 'id_im_1', 'tok_im_1', 'immutableuser', 'FIRST PERSON IN THE YOUNIVERSE', 'GENESIS 001', 'production');
       `);
 
       // Attempt to alter identity_id
@@ -430,7 +430,7 @@ test("PG18: 7. Ineligible identity (internal email) rejected by database trigger
         client.query(`
           INSERT INTO ${schema}.genesis_awards (
             award_slot, identity_id, verification_token_id, awarded_username, official_title, award_label, source_environment
-          ) VALUES ('genesis_001', 'id_ineligible', 'tok_ineligible', 'internaluser', 'FIRST PERSON OF THE YOUNIVERSE', 'GENESIS 001', 'production')
+          ) VALUES ('genesis_001', 'id_ineligible', 'tok_ineligible', 'internaluser', 'FIRST PERSON IN THE YOUNIVERSE', 'GENESIS 001', 'production')
         `),
         /Identity \(id_ineligible\) email is excluded from Genesis 001 eligibility/
       );

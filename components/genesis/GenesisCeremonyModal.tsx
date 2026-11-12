@@ -105,7 +105,7 @@ export const GenesisCeremonyModal: React.FC<GenesisCeremonyModalProps> = ({
             id="genesis-ceremony-title"
             className="text-xl sm:text-2xl font-black tracking-[0.14em] uppercase text-white mb-2"
           >
-            FIRST PERSON OF THE YOUNIVERSE
+            FIRST PERSON IN THE YOUNIVERSE
           </h2>
           {handle && (
             <p className="text-xs font-mono text-amber-200/75 mb-6">

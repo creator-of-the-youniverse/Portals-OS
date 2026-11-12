@@ -73,7 +73,7 @@ const RegistryCard: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
             GENESIS 001 · HISTORICAL REGISTRY
           </span>
           <h2 className="text-lg font-bold tracking-wide text-white">
-            FIRST PERSON OF THE YOUNIVERSE
+            FIRST PERSON IN THE YOUNIVERSE
           </h2>
         </div>
       </div>

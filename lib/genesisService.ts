@@ -1,7 +1,7 @@
 /**
  * lib/genesisService.ts
  *
- * Genesis 001 ("FIRST PERSON OF THE YOUNIVERSE" / "GENESIS 001") allocation,
+ * Genesis 001 ("FIRST PERSON IN THE YOUNIVERSE" / "GENESIS 001") allocation,
  * registry lookup, and ceremony acknowledgment service.
  *
  * Design guarantees:
@@ -13,7 +13,7 @@
  *  - Ceremony acknowledgment updates `ceremony_seen_at` monotonically without altering award history.
  */
 
-export const GENESIS_OFFICIAL_TITLE = "FIRST PERSON OF THE YOUNIVERSE";
+export const GENESIS_OFFICIAL_TITLE = "FIRST PERSON IN THE YOUNIVERSE";
 export const GENESIS_DESIGNATION = "GENESIS 001";
 export const GENESIS_AWARD_SLOT = "genesis_001";
 export const GENESIS_ENTITLEMENT_KEY = "genesis_lifetime_access";
