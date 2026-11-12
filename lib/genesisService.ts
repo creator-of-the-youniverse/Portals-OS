@@ -123,7 +123,9 @@ async function runQuery(
 ): Promise<any[]> {
   if (typeof (db as QueryRunner)?.query === "function") {
     const res = await (db as QueryRunner).query(text, params);
-    return Array.isArray(res?.rows) ? res.rows : [];
+    if (Array.isArray(res?.rows)) return res.rows;
+    if (Array.isArray(res)) return res;
+    return [];
   }
   if (tagQueryFn) {
     const rows = await tagQueryFn();
