@@ -19,6 +19,8 @@ import {
   reconcileOrderRefundsFromStripe,
   getFoundingAngelStatus,
   FoundingAngelCapacityError,
+  FoundingAngelSalesPausedError,
+  isFoundingAngelsSalesEnabled,
 } from "../../lib/foundingAngelsService.ts";
 
 export const config = {
@@ -267,7 +269,7 @@ export function resolveTrustedOrigin(
     }
 
     if (isProd) {
-      if (host !== CANONICAL_APEX_DOMAIN) {
+      if (host !== CANONICAL_APEX_DOMAIN && host !== `www.${CANONICAL_APEX_DOMAIN}`) {
         throw new Error("Configured production origin must be the canonical itsyouonline.com domain");
       }
     } else {
@@ -345,6 +347,15 @@ async function handleFoundingAngelCheckout(req: any, res: any, stripeSecret: str
     return res.status(405).json({ status: "method-not-allowed" });
   }
 
+  const salesEnabled = deps?.salesEnabled ?? isFoundingAngelsSalesEnabled(deps?.env ?? process.env);
+  if (!salesEnabled) {
+    return res.status(503).json({
+      status: "sales-paused",
+      error: "SALES_PAUSED",
+      message: "Founding Angels enrollment is temporarily paused.",
+    });
+  }
+
   const auth = deps?.authenticateRequest
     ? await deps.authenticateRequest(req)
     : await authenticateRequest(req, deps?.authDeps);
@@ -369,6 +380,17 @@ async function handleFoundingAngelCheckout(req: any, res: any, stripeSecret: str
     return res.status(200).json({ status: "ok", url: result.url, sessionId: result.sessionId });
   } catch (err: any) {
     console.error("[/api/stripe/founding-angels-checkout] Error:", err);
+    if (
+      err instanceof FoundingAngelSalesPausedError ||
+      err?.code === "SALES_PAUSED" ||
+      err?.message?.includes("temporarily paused")
+    ) {
+      return res.status(503).json({
+        status: "sales-paused",
+        error: "SALES_PAUSED",
+        message: "Founding Angels enrollment is temporarily paused.",
+      });
+    }
     if (
       err instanceof FoundingAngelCapacityError ||
       err?.code === "CAPACITY_FULL" ||

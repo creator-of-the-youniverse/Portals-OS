@@ -26,8 +26,17 @@ import publicHandler from "../api/youniverse/[handle]/public.ts";
 import { getYouniversePublicDataHandler } from "../controllers/youniversePublicController.js";
 import { verifyJwt } from "../middleware/verifyJwt.js";
 import { saveWeaverArtifactHandler, getWeavedWidgetsHandler } from "../controllers/notNotesController.js";
-import { sendVerificationEmail, isEmailDeliveryConfigured } from "../lib/emailService.ts";
+import vercelArtifactHandler from "../api/not-notes/artifact.ts";
+import vercelWidgetsHandler from "../api/not-notes/widgets.ts";
+import {
+  sendVerificationEmail,
+  isEmailDeliveryConfigured,
+  resolveSenderAddress,
+  DEFAULT_EMAIL_FROM,
+} from "../lib/emailService.ts";
 import { createVerificationToken, consumeVerificationToken } from "../lib/emailVerification.ts";
+
+process.env.HANDOFF_ALLOW_EPHEMERAL_DEV_KEYS = "1";
 
 function hashToken(raw) {
   return createHash("sha256").update(raw, "utf8").digest("hex");
@@ -672,5 +681,234 @@ test("R6A-10: Missing production email configuration fails safely without throwi
     assert.ok(result.error);
   } finally {
     if (oldKey) process.env.RESEND_API_KEY = oldKey;
+  }
+});
+
+test("R6A-11: Checkpoint A — Claim, verification, and NotNotes operate purely on Neon without Prisma shadow rows", async () => {
+  const identities = [];
+  const verificationTokens = [];
+  const sessions = [];
+  const notNotes = [];
+  const baseSql = createMockSqlDb({ identities, verificationTokens, sessions, notNotes });
+
+  // Strict SQL wrapper that throws if any query touches legacy "User" or "Youniverse" tables
+  const strictNeonSql = async (strings, ...values) => {
+    const queryText = strings.join("?");
+    if (queryText.includes('"User"') || queryText.includes('"Youniverse"')) {
+      throw new Error(`Forbidden legacy shadow table access detected: ${queryText}`);
+    }
+    return baseSql(strings, ...values);
+  };
+
+  let rawVerifyToken = null;
+  const { req: claimReq, res: claimRes } = createMockReqRes({
+    method: "POST",
+    body: { handle: "neonpure", email: "neonpure@example.com", displayName: "Neon Pure" },
+  });
+
+  await claimHandler(claimReq, claimRes, {
+    sql: strictNeonSql,
+    sendVerificationEmail: async ({ token }) => {
+      rawVerifyToken = token;
+      return { sent: true, reason: "delivered" };
+    },
+  });
+
+  assert.strictEqual(claimRes.statusCode, 201);
+  assert.strictEqual(identities.length, 1);
+
+  const { req: verifyReq, res: verifyRes } = createMockReqRes({
+    method: "GET",
+    query: { token: rawVerifyToken },
+  });
+  await verifyHandler(verifyReq, verifyRes, { sql: strictNeonSql });
+  assert.strictEqual(verifyRes.statusCode, 200);
+  const sessionToken = verifyRes.body.sessionToken;
+
+  // Create NotNote via Vercel serverless handler without any Prisma shadow rows
+  const { req: vSaveReq, res: vSaveRes } = createMockReqRes({
+    method: "POST",
+    headers: { authorization: `Bearer ${sessionToken}` },
+    body: {
+      title: "NeonServerlessWidget",
+      code: "export default () => <div>Serverless</div>",
+      dependencies: ["framer-motion"],
+    },
+  });
+  await vercelArtifactHandler(vSaveReq, vSaveRes, { sql: strictNeonSql, databaseUrl: "mock://neon" });
+  assert.strictEqual(vSaveRes.statusCode, 200);
+  assert.strictEqual(vSaveRes.body.success, true);
+  assert.strictEqual(vSaveRes.body.artifact.youniverseId, identities[0].identity_id);
+  assert.strictEqual(vSaveRes.body.artifact.status, "APPROVED");
+
+  // Retrieve widgets via Vercel serverless handler
+  const { req: vGetReq, res: vGetRes } = createMockReqRes({
+    method: "GET",
+    headers: { authorization: `Bearer ${sessionToken}` },
+  });
+  await vercelWidgetsHandler(vGetReq, vGetRes, { sql: strictNeonSql, databaseUrl: "mock://neon" });
+  assert.strictEqual(vGetRes.statusCode, 200);
+  assert.strictEqual(vGetRes.body.widgets.length, 1);
+  assert.strictEqual(vGetRes.body.widgets[0].title, "NeonServerlessWidget");
+  assert.deepStrictEqual(vGetRes.body.widgets[0].dependencies, ["framer-motion"]);
+});
+
+test("R6A-12: Checkpoint A — NotNotes preserves status and content filtering behavior", async () => {
+  const identityId = "yi_status_test";
+  const notNotes = [
+    {
+      id: "nn_approved_widget",
+      youniverseId: identityId,
+      title: "ApprovedWidget",
+      content: { type: "REACT_WIDGET", code: "export default () => <div>OK</div>", dependencies: [] },
+      status: "APPROVED",
+      createdAt: new Date(),
+    },
+    {
+      id: "nn_pending_widget",
+      youniverseId: identityId,
+      title: "PendingWidget",
+      content: { type: "REACT_WIDGET", code: "export default () => <div>Pending</div>", dependencies: [] },
+      status: "PENDING",
+      createdAt: new Date(),
+    },
+    {
+      id: "nn_rejected_widget",
+      youniverseId: identityId,
+      title: "RejectedWidget",
+      content: { type: "REACT_WIDGET", code: "export default () => <div>Rejected</div>", dependencies: [] },
+      status: "REJECTED",
+      createdAt: new Date(),
+    },
+    {
+      id: "nn_archived_book",
+      youniverseId: identityId,
+      title: "ArchivedNote",
+      content: { type: "TEXT_NOTE", body: "Not a widget" },
+      status: "APPROVED",
+      createdAt: new Date(),
+    },
+  ];
+
+  const mockSql = createMockSqlDb({ notNotes });
+  const req = { user: { youniverseId: identityId } };
+  const { res } = createMockReqRes();
+
+  await getWeavedWidgetsHandler(req, res, { sql: mockSql });
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.widgets.length, 1);
+  assert.strictEqual(res.body.widgets[0].id, "nn_approved_widget");
+  assert.strictEqual(res.body.widgets[0].title, "ApprovedWidget");
+});
+
+test("R6A-13: Email sender resilience — respects valid EMAIL_FROM, rejects placeholders/malformed, never logs secrets", async () => {
+  // 1. Valid configured EMAIL_FROM values are respected
+  assert.strictEqual(
+    resolveSenderAddress("onboarding@itsyouonline.com"),
+    "onboarding@itsyouonline.com"
+  );
+  assert.strictEqual(
+    resolveSenderAddress("verify@itsyouonline.com"),
+    "verify@itsyouonline.com"
+  );
+  assert.strictEqual(
+    resolveSenderAddress("  THE YOUNIVERSE <onboarding@itsyouonline.com>  "),
+    "THE YOUNIVERSE <onboarding@itsyouonline.com>"
+  );
+
+  // 2. Empty, malformed, or placeholder values fall back to onboarding@itsyouonline.com
+  const invalidOrPlaceholderSenders = [
+    undefined,
+    null,
+    "",
+    "   ",
+    "placeholder",
+    "unconfigured",
+    "changeme",
+    "todo",
+    "not-an-email",
+    "@itsyouonline.com",
+    "onboarding@",
+    "onboarding@itsyouonline",
+    "onboarding@localhost",
+    "test@example.com",
+    "noreply@example.invalid",
+    "user@placeholder.local",
+    "placeholder@itsyouonline.com",
+    "THE YOUNIVERSE <placeholder>",
+    "THE YOUNIVERSE <test@example.com>",
+    "THE YOUNIVERSE <onboarding@itsyouonline.com",
+  ];
+
+  for (const candidate of invalidOrPlaceholderSenders) {
+    assert.strictEqual(
+      resolveSenderAddress(candidate),
+      DEFAULT_EMAIL_FROM,
+      `Expected fallback for sender candidate: ${String(candidate)}`
+    );
+  }
+
+  // 3. sendVerificationEmail uses fallback when EMAIL_FROM is a placeholder and never logs secrets on failure
+  const oldKey = process.env.RESEND_API_KEY;
+  const oldFrom = process.env.EMAIL_FROM;
+  const secretApiKey = "re_test_secret_key_do_not_log_999";
+  const secretVerifyToken = "raw_verify_token_do_not_log_888";
+
+  const capturedPayloads = [];
+  const capturedLogs = [];
+  const origError = console.error;
+  const origWarn = console.warn;
+
+  try {
+    console.error = (...args) => capturedLogs.push(args.join(" "));
+    console.warn = (...args) => capturedLogs.push(args.join(" "));
+
+    process.env.RESEND_API_KEY = secretApiKey;
+    process.env.EMAIL_FROM = "placeholder";
+
+    const mockFetchOk = async (_url, opts) => {
+      capturedPayloads.push(JSON.parse(opts.body));
+      return { ok: true, status: 200, text: async () => "{}" };
+    };
+
+    const okResult = await sendVerificationEmail(
+      { email: "owner@itsyouonline.com", handle: "owner", token: secretVerifyToken },
+      mockFetchOk
+    );
+    assert.strictEqual(okResult.sent, true);
+    assert.strictEqual(capturedPayloads.length, 1);
+    assert.strictEqual(capturedPayloads[0].from, "onboarding@itsyouonline.com");
+
+    // Valid custom sender is respected in actual dispatch
+    process.env.EMAIL_FROM = "THE YOUNIVERSE <verify@itsyouonline.com>";
+    await sendVerificationEmail(
+      { email: "owner@itsyouonline.com", handle: "owner", token: secretVerifyToken },
+      mockFetchOk
+    );
+    assert.strictEqual(capturedPayloads[1].from, "THE YOUNIVERSE <verify@itsyouonline.com>");
+
+    // Upstream failure remains fail-closed and never logs API key or verification token
+    const mockFetchFail = async () => ({
+      ok: false,
+      status: 422,
+      text: async () => "Invalid from address",
+    });
+    const failResult = await sendVerificationEmail(
+      { email: "owner@itsyouonline.com", handle: "owner", token: secretVerifyToken },
+      mockFetchFail
+    );
+    assert.strictEqual(failResult.sent, false);
+    assert.strictEqual(failResult.reason, "delivery_failed");
+
+    const allLogs = capturedLogs.join("\n");
+    assert.strictEqual(allLogs.includes(secretApiKey), false, "API key must never appear in logs");
+    assert.strictEqual(allLogs.includes(secretVerifyToken), false, "Verification token must never appear in logs");
+  } finally {
+    console.error = origError;
+    console.warn = origWarn;
+    if (oldKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = oldKey;
+    if (oldFrom === undefined) delete process.env.EMAIL_FROM;
+    else process.env.EMAIL_FROM = oldFrom;
   }
 });

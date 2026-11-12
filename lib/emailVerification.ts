@@ -108,17 +108,6 @@ export async function consumeVerificationToken(
   if (atomicRows && atomicRows.length > 0) {
     const verified = atomicRows[0];
 
-    // Sync legacy Prisma User table if present
-    try {
-      await sql`
-        UPDATE "User"
-        SET "emailVerified" = NOW()
-        WHERE id = ${verified.identity_id}
-      `;
-    } catch {
-      // Non-fatal if legacy User table row is not present
-    }
-
     return {
       ok: true,
       identityId: String(verified.identity_id),
@@ -179,14 +168,6 @@ export async function consumeVerificationToken(
     SET email_verified_at = NOW()
     WHERE identity_id = ${tokenRecord.identity_id}
   `;
-
-  try {
-    await sql`
-      UPDATE "User"
-      SET "emailVerified" = NOW()
-      WHERE id = ${tokenRecord.identity_id}
-    `;
-  } catch {}
 
   return {
     ok: true,

@@ -187,22 +187,6 @@ export default async function handler(req: any, res: any, deps: ClaimHandlerDeps
           ${new Date().toISOString()}
         )
       `;
-
-      // ── Sync to Prisma User & Youniverse tables for foreign-key integrity ──
-      try {
-        await sql`
-          INSERT INTO "User" (id, email, "emailVerified", "createdAt", "updatedAt")
-          VALUES (${identityId}, ${normalizedEmail}, NULL, NOW(), NOW())
-          ON CONFLICT (id) DO NOTHING
-        `;
-        await sql`
-          INSERT INTO "Youniverse" (id, handle, type, tier, "ownerId", "isPrimary", "isLive", "createdAt", "updatedAt")
-          VALUES (${identityId}, ${cleanHandle}, 'PERSON', 'FREE', ${identityId}, TRUE, TRUE, NOW(), NOW())
-          ON CONFLICT (id) DO NOTHING
-        `;
-      } catch {
-        // Non-fatal if legacy tables are omitted in test mocks
-      }
     }
 
     // ── Generate dedicated email verification token ───────────

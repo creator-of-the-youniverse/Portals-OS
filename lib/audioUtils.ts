@@ -6,8 +6,21 @@ export const playAudio = (src: string, sampleRate?: number, volume: number = 0.5
         audio.volume = Math.max(0, Math.min(1, volume));
 
         audio.addEventListener('canplaythrough', () => {
-            audio.play().then(() => resolve()).catch(reject);
-        });
+            audio.play().then(() => resolve()).catch((err) => {
+                if (err?.name === 'NotAllowedError') {
+                    const resumeOnInteraction = () => {
+                        audio.play().catch(() => {});
+                        window.removeEventListener('pointerdown', resumeOnInteraction);
+                        window.removeEventListener('keydown', resumeOnInteraction);
+                    };
+                    window.addEventListener('pointerdown', resumeOnInteraction, { once: true });
+                    window.addEventListener('keydown', resumeOnInteraction, { once: true });
+                    resolve();
+                } else {
+                    reject(err);
+                }
+            });
+        }, { once: true });
 
         audio.addEventListener('error', (error) => {
             console.error("Failed to load audio:", error);

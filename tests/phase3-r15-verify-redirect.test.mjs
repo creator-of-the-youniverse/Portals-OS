@@ -437,6 +437,90 @@ test("R15-04b: Handoff signing failure → handler fails, no redirect issued", a
   assert.strictEqual(res.ended, false, "No success response may be written");
 });
 
+test("R15-04d: Missing HANDOFF_PRIVATE_KEY fails BEFORE consuming single-use verification token", async () => {
+  const db = createMockDb();
+  const rawToken = db.seedIdentity({ identityId: "ident_missing_key", username: "missingkey" });
+
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      HANDOFF_PRIVATE_KEY: undefined,
+      HANDOFF_ALLOW_EPHEMERAL_DEV_KEYS: undefined,
+    },
+    async () => {
+      const { req, res } = createMockReqRes({
+        query: { token: rawToken },
+        headers: { host: "www.itsyouonline.com", accept: BROWSER_ACCEPT },
+      });
+
+      await assert.rejects(
+        () => verifyHandler(req, res, { sql: db.sql }),
+        (err) => err instanceof HandoffConfigError && err.message.includes("HANDOFF_PRIVATE_KEY is not configured")
+      );
+
+      assertNoRedirect(res, "missing private key");
+      assert.strictEqual(res.ended, false);
+      assert.strictEqual(db.verificationTokens[0].consumed_at, null, "Token must NOT be consumed when key is missing");
+      assert.strictEqual(db.identities[0].email_verified_at, null, "Identity must NOT be marked verified when key is missing");
+      assert.strictEqual(db.sessions.length, 0, "No session may be created when key is missing");
+      assert.strictEqual(db.handoffTokens.length, 0, "No handoff nonce may be created when key is missing");
+    }
+  );
+
+  // Once valid key is restored, the exact same single-use token succeeds cleanly
+  const retry = createMockReqRes({
+    query: { token: rawToken },
+    headers: { host: "www.itsyouonline.com", accept: BROWSER_ACCEPT },
+  });
+  await verifyHandler(retry.req, retry.res, { sql: db.sql });
+  assert.strictEqual(retry.res.statusCode, 303);
+  assert.ok(db.verificationTokens[0].consumed_at instanceof Date);
+  assert.ok(db.identities[0].email_verified_at instanceof Date);
+});
+
+test("R15-04e: Malformed, non-RSA, or weak (<2048-bit) HANDOFF_PRIVATE_KEY fails BEFORE consuming verification token", async () => {
+  const db = createMockDb();
+  const rawToken = db.seedIdentity({ identityId: "ident_bad_key", username: "badkey" });
+
+  const ecKeyPair = crypto.generateKeyPairSync("ec", {
+    namedCurve: "prime256v1",
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+  const weakRsaKeyPair = crypto.generateKeyPairSync("rsa", {
+    modulusLength: 1024,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  const invalidKeyCases = [
+    ["corrupt PEM", "not-a-valid-private-key-at-all", "not a valid private key"],
+    ["EC key instead of RSA", ecKeyPair.privateKey, "must be an RSA private key"],
+    ["1024-bit RSA key", weakRsaKeyPair.privateKey, "minimum key size of 2048 bits"],
+  ];
+
+  for (const [label, badKey, expectedMessage] of invalidKeyCases) {
+    await withEnv({ NODE_ENV: "production", HANDOFF_PRIVATE_KEY: badKey }, async () => {
+      const { req, res } = createMockReqRes({
+        query: { token: rawToken },
+        headers: { host: "www.itsyouonline.com", accept: BROWSER_ACCEPT },
+      });
+
+      await assert.rejects(
+        () => verifyHandler(req, res, { sql: db.sql }),
+        (err) => err instanceof HandoffConfigError && err.message.includes(expectedMessage),
+        label
+      );
+
+      assertNoRedirect(res, label);
+      assert.strictEqual(db.verificationTokens[0].consumed_at, null, `${label}: token must remain unconsumed`);
+      assert.strictEqual(db.identities[0].email_verified_at, null, `${label}: identity must remain unverified`);
+      assert.strictEqual(db.sessions.length, 0, `${label}: no session created`);
+      assert.strictEqual(db.handoffTokens.length, 0, `${label}: no handoff nonce created`);
+    });
+  }
+});
+
 test("R15-04c: JSON path keeps legacy non-fatal nonce-insert behavior (preserved contract)", async () => {
   const db = createMockDb({ failHandoffInsert: true });
   const rawToken = db.seedIdentity({ identityId: "ident_jo", username: "jo" });

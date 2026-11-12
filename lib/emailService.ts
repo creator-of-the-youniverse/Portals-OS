@@ -50,6 +50,36 @@ export function buildVerificationUrl(token: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/api/v1/auth/verify?token=${encodeURIComponent(token)}`;
 }
 
+export const DEFAULT_EMAIL_FROM = "onboarding@itsyouonline.com";
+
+const PLAIN_EMAIL_RE = /^[a-z0-9._%+-]+@([a-z0-9-]+\.)+[a-z]{2,}$/i;
+const NAMED_EMAIL_RE = /^[^<>@\r\n]+<\s*([a-z0-9._%+-]+@([a-z0-9-]+\.)+[a-z]{2,})\s*>$/i;
+const PLACEHOLDER_SENDER_RE =
+  /(?:^|[\s<@.])(placeholder|example\.(?:com|org|net|invalid)|invalid|local|localhost|changeme|unconfigured|todo|tbd|dummy|fake|none|null|undefined)(?:$|[\s>@.])/i;
+
+/**
+ * Resolves a valid, non-placeholder sender address for transactional email.
+ * Respects a valid configured EMAIL_FROM ("addr@domain.tld" or "Name <addr@domain.tld>"),
+ * and falls back to DEFAULT_EMAIL_FROM on empty, malformed, or placeholder values.
+ */
+export function resolveSenderAddress(configuredFrom: unknown = process.env.EMAIL_FROM): string {
+  if (typeof configuredFrom !== "string") return DEFAULT_EMAIL_FROM;
+  const trimmed = configuredFrom.trim();
+  if (!trimmed) return DEFAULT_EMAIL_FROM;
+  if (PLACEHOLDER_SENDER_RE.test(trimmed)) return DEFAULT_EMAIL_FROM;
+
+  if (PLAIN_EMAIL_RE.test(trimmed)) {
+    return trimmed;
+  }
+
+  const namedMatch = trimmed.match(NAMED_EMAIL_RE);
+  if (namedMatch && !PLACEHOLDER_SENDER_RE.test(namedMatch[1])) {
+    return trimmed;
+  }
+
+  return DEFAULT_EMAIL_FROM;
+}
+
 /**
  * Dispatches an email verification link to the user.
  *
@@ -60,8 +90,8 @@ export async function sendVerificationEmail(
   fetchFn: typeof fetch = fetch
 ): Promise<EmailDeliveryResult> {
   const { email, handle, token } = params;
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM || "onboarding@itsyouonline.com";
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const fromAddress = resolveSenderAddress(process.env.EMAIL_FROM);
 
   if (!apiKey) {
     console.warn(

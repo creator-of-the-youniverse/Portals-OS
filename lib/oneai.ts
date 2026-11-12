@@ -1,9 +1,19 @@
 export async function generateOneAiHint(contextText: string): Promise<string> {
   try {
+    let token: string | null = null;
+    if (typeof window !== 'undefined') {
+      token = localStorage.getItem('youniverse_session_token') || localStorage.getItem('weaver_jwt');
+    }
+
+    if (!token) {
+      return contextText.length > 50 ? contextText.slice(0, 50) + "..." : contextText;
+    }
+
     const response = await fetch('/api/gemini', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
         model: 'gemini-1.5-flash',

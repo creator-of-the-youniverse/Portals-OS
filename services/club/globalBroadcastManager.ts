@@ -4,7 +4,7 @@
  * Uses clubSupabase to avoid conflicting with Portals-OS's own Supabase instance.
  */
 
-import { clubSupabase as supabase } from "./supabaseClient";
+import { clubSupabase as supabase, isClubConfigured } from "./supabaseClient";
 import type { Song, RadioState } from "./types";
 import { PersistentRadioService } from "./PersistentRadioService";
 
@@ -67,8 +67,13 @@ export class GlobalBroadcastManager {
     this.state = this.loadLocalState();
     this.setupAudioHandlers();
     this.startTimeUpdates();
-    this.initializeGlobalState();
-    this.initLeaderElection();
+    if (isClubConfigured && supabase) {
+      this.initializeGlobalState();
+      this.initLeaderElection();
+    } else {
+      this.state.radioState = "IDLE";
+      this.state.djBanter = "Club Radio is in standby (backend unconfigured).";
+    }
 
     console.log("🎙️ [Club Youniverse] GlobalBroadcastManager initialized in Portals-OS");
   }
@@ -82,6 +87,7 @@ export class GlobalBroadcastManager {
   }
 
   private async initLeaderElection() {
+    if (!isClubConfigured || !supabase) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       this.userId = user.id;
@@ -109,7 +115,7 @@ export class GlobalBroadcastManager {
   public getLeaderId() { return this.state.leaderId; }
 
   public async claimLeadership(force: boolean = false, previousLeaderId: string | null = null) {
-    if (!this.userId) return false;
+    if (!isClubConfigured || !supabase || !this.userId) return false;
     this.releasedAt = 0;
     let query = supabase
       .from("broadcasts")
@@ -140,7 +146,7 @@ export class GlobalBroadcastManager {
   }
 
   public async releaseLeadership() {
-    if (!this.isLeaderLocal || !this.userId) return;
+    if (!isClubConfigured || !supabase || !this.isLeaderLocal || !this.userId) return;
     const { error } = await supabase
       .from("broadcasts")
       .update({ leader_id: null })
@@ -157,6 +163,7 @@ export class GlobalBroadcastManager {
   }
 
   private async tryClaimLeadership() {
+    if (!isClubConfigured || !supabase) return;
     try {
       const { data, error } = await supabase
         .from("broadcasts")
@@ -243,6 +250,7 @@ export class GlobalBroadcastManager {
   }
 
   private async initializeGlobalState() {
+    if (!isClubConfigured || !supabase) return;
     const { data, error } = await supabase.from("broadcasts").select(QUERY).limit(1).single();
     if (data) this.syncStateFromRemote(data);
     else if (error) console.warn("[ClubRadio] Failed to fetch broadcast state:", error.message);
@@ -276,6 +284,7 @@ export class GlobalBroadcastManager {
   }
 
   private async fetchAndSync() {
+    if (!isClubConfigured || !supabase) return;
     const { data } = await supabase.from("broadcasts").select(QUERY).limit(1).single();
     if (data) this.syncStateFromRemote(data);
   }
@@ -479,6 +488,7 @@ export class GlobalBroadcastManager {
   }
 
   private async persistBroadcastState(isPlaying: boolean) {
+    if (!isClubConfigured || !supabase) return;
     if (!this.state.nowPlaying) {
       await supabase.from("broadcasts").update({ current_song_id: null, radio_state: "POOL" }).eq("id", "00000000-0000-0000-0000-000000000000");
       return;
@@ -493,7 +503,9 @@ export class GlobalBroadcastManager {
   public async setRadioState(state: RadioState) {
     this.state.radioState = state;
     this.emit("radioStateChanged", state);
-    await supabase.from("broadcasts").update({ radio_state: state }).eq("id", "00000000-0000-0000-0000-000000000000");
+    if (isClubConfigured && supabase) {
+      await supabase.from("broadcasts").update({ radio_state: state }).eq("id", "00000000-0000-0000-0000-000000000000");
+    }
   }
 
   public async setNextSong(song: Song | null) {
@@ -528,12 +540,13 @@ export class GlobalBroadcastManager {
   }
 
   public async sendSiteCommand(type: string, payload: any) {
+    if (!isClubConfigured || !supabase) return;
     const cmd = { id: Date.now().toString(), type, payload, timestamp: Date.now() };
     await supabase.channel("site-commands").send({ type: "broadcast", event: "site_command", payload: cmd });
   }
 
   public async castVote(stars: number) {
-    if (!this.state.nowPlaying) return;
+    if (!isClubConfigured || !supabase || !this.state.nowPlaying) return;
     await supabase.rpc("cast_vote", { p_song_id: this.state.nowPlaying.id, p_stars: stars });
   }
 

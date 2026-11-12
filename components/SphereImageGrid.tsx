@@ -308,6 +308,12 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
       };
     });
 
+    // Skip O(N^2) collision pass for large Fibonacci constellations (> 48 nodes)
+    // as Fibonacci distribution already spaces them evenly and O(N^2) per frame stalls React.
+    if (positions.length > 48) {
+      return positions;
+    }
+
     // Simplified collision detection - only check nearby items
     const adjustedPositions = [...positions];
     const visiblePositions = positions.filter(pos => pos.isVisible);

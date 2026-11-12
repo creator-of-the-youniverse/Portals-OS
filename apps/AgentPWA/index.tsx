@@ -12,6 +12,7 @@ interface AgentPWAProps {
     id?: string;
     url?: string;
     agentName?: string;
+    agentRole?: string;
   };
 }
 
@@ -274,7 +275,7 @@ const AgentPWA: React.FC<AgentPWAProps> = ({ metadata }) => {
                     <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
                     <div className="text-center">
                       <p className="text-white/80 text-[10px] font-black tracking-[0.2em] uppercase mb-2">ESTABLISHING SECURE UPLINK</p>
-                      <p className="text-cyan-400/50 text-[10px] font-mono">{(agent.url || metadata!.url).replace('https://', '')}</p>
+                      <p className="text-cyan-400/50 text-[10px] font-mono">{(agent.url || metadata?.url || '').replace('https://', '')}</p>
                     </div>
                   </div>
                 )}

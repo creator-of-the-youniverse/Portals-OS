@@ -4,7 +4,7 @@
  * Import paths rewritten to use services/club/ prefix.
  */
 
-import { clubSupabase as supabase } from "./supabaseClient";
+import { clubSupabase as supabase, isClubConfigured } from "./supabaseClient";
 import type { Song, ChatMessage } from "./types";
 import { LocalAiService } from "./LocalAiService";
 
@@ -51,6 +51,7 @@ export class PersistentRadioService {
    * Watchdog: Ensures the radio is healthy and something is playing.
    */
   static async checkRadioHealth(nowPlaying: Song | null): Promise<Song | null> {
+    if (!isClubConfigured || !supabase) return null;
     const now = Date.now();
     if (now - this.lastCheck < 10000) return null;
     this.lastCheck = now;
@@ -82,6 +83,7 @@ export class PersistentRadioService {
   }
 
   static async handleSongEnded(song: Song | null): Promise<Song | null> {
+    if (!isClubConfigured || !supabase) return null;
     if (!song) return this.cycleNextToNow();
     const isDebut = song.status === "debut";
     if (isDebut) {
@@ -93,6 +95,7 @@ export class PersistentRadioService {
   }
 
   private static async resolveDebut(song: Song) {
+    if (!isClubConfigured || !supabase) return;
     const rating = song.liveStarsCount > 0 ? song.liveStarsSum / song.liveStarsCount : 5;
     const passed = rating >= 2;
     await supabase.from("songs").update({
@@ -102,10 +105,12 @@ export class PersistentRadioService {
   }
 
   private static async returnToPool(song: Song) {
+    if (!isClubConfigured || !supabase) return;
     await supabase.from("songs").update({ status: "pool" }).eq("id", song.id);
   }
 
   private static async cycleNextToNow(): Promise<Song | null> {
+    if (!isClubConfigured || !supabase) return null;
     const { data: next } = await supabase
       .from("songs")
       .select("*")
@@ -148,6 +153,7 @@ export class PersistentRadioService {
   }
 
   static async populateTheBox() {
+    if (!isClubConfigured || !supabase) return;
     const { data: existing } = await supabase
       .from("songs")
       .select("id")
@@ -171,11 +177,13 @@ export class PersistentRadioService {
   }
 
   static async forceRefreshBox() {
+    if (!isClubConfigured || !supabase) return;
     await supabase.from("songs").update({ status: "pool" }).eq("status", "in_box");
     await this.populateTheBox();
   }
 
   static async hardReset() {
+    if (!isClubConfigured || !supabase) return;
     await supabase.from("songs").update({ status: "pool" }).in("status", ["in_box", "now_playing", "next_play"]);
     await supabase.from("broadcasts").update({
       radio_state: "POOL",
@@ -185,6 +193,7 @@ export class PersistentRadioService {
   }
 
   static async runSimulationStep() {
+    if (!isClubConfigured || !supabase) return;
     // Simulate votes from bots/fallback when no real listeners
     const { data: boxSongs } = await supabase
       .from("songs")
@@ -203,6 +212,9 @@ export class PersistentRadioService {
   }
 
   static async getBoxStatusSummary(): Promise<string> {
+    if (!isClubConfigured || !supabase) {
+      return "CLUB RADIO STANDBY (Backend Unconfigured)";
+    }
     const { data } = await supabase
       .from("songs")
       .select("title, artist_name, stars")
@@ -219,6 +231,9 @@ export class PersistentRadioService {
   }
 
   static async getLeaderboardSummary(): Promise<string> {
+    if (!isClubConfigured || !supabase) {
+      return "LEADERBOARD STANDBY";
+    }
     const { data } = await supabase
       .from("songs")
       .select("title, artist_name, stars, play_count")

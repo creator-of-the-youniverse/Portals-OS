@@ -8,8 +8,10 @@ import React, { createContext, useState, useMemo, useRef, useEffect, useCallback
 import { getBroadcastManager } from "../services/club/globalBroadcastManager";
 import { PersistentRadioService } from "../services/club/PersistentRadioService";
 import type { Song, RadioState, ChatMessage } from "../services/club/types";
+import { isClubConfigured } from "../services/club/supabaseClient";
 
 interface RadioContextType {
+  isConfigured: boolean;
   nowPlaying: Song | null;
   nextSong: Song | null;
   radioState: RadioState;
@@ -50,8 +52,16 @@ export const ClubRadioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [volume, setVolumeState] = useState(broadcastManager.getVolume());
   const [isMuted, setIsMutedState] = useState(broadcastManager.isMuted());
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [tickerText, setTickerText] = useState("♻️ Tuning in to Club Youniverse... the Youniverse speaks.");
-  const [djBanter, setDjBanter] = useState("The Youniverse is live. Stand by.");
+  const [tickerText, setTickerText] = useState(
+    isClubConfigured
+      ? "♻️ Tuning in to Club Youniverse... the Youniverse speaks."
+      : "📻 Club Radio is currently in standby (backend unconfigured)."
+  );
+  const [djBanter, setDjBanter] = useState(
+    isClubConfigured
+      ? "The Youniverse is live. Stand by."
+      : "Club Radio offline."
+  );
   const [leaderId, setLeaderId] = useState<string | null>(broadcastManager.getLeaderId());
 
   const togglePlay = useCallback(() => broadcastManager.togglePlay(), [broadcastManager]);
@@ -125,6 +135,7 @@ export const ClubRadioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [broadcastManager]);
 
   const value = useMemo(() => ({
+    isConfigured: isClubConfigured,
     nowPlaying, nextSong, radioState, isLeader, isPlaying,
     currentTime, duration: nowPlaying?.durationSec || 0,
     volume, isMuted, chatMessages, tickerText, djBanter, leaderId,

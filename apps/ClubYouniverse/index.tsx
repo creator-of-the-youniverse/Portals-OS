@@ -36,7 +36,7 @@ const ClubYouniverse: React.FC<ClubYouniverseProps> = () => {
   const radio = useClubRadio();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeState, setIframeState] = useState<"loading" | "loaded" | "error">("loading");
-  const [useEmbedded, setUseEmbedded] = useState(false);
+  const [useEmbedded, setUseEmbedded] = useState(true);
 
   // Try iframe first; fall back to embedded native view after 8s
   useEffect(() => {

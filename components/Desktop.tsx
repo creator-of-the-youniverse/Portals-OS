@@ -84,6 +84,31 @@ const Desktop: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Active squad data for SquadSphere
   const activeSquad = activeSquadId ? getSquadById(activeSquadId) : null;
 
+  const sphereApps = React.useMemo(() => getSphereApps(projectFolders), [projectFolders]);
+
+  const handleSphereAppClick = useCallback((appId: any) => {
+    const agent = NEXUS_AGENTS.find(a => a.id === appId);
+    if (agent) {
+      openPwaSidebar({
+        id: agent.id,
+        label: agent.name,
+        parentLabel: agent.category,
+        parentSquadId: agent.squadId,
+        role: agent.role,
+        pain: agent.toolCard?.useThisWhen?.join(", "),
+        purpose: agent.toolCard?.purpose,
+        mission: agent.description,
+        inputs: agent.toolCard?.inputNeeded,
+        deliverables: agent.toolCard?.outputDelivered,
+        oracleInsight: agent.oracleInsight,
+        prevNode: agent.suggestedPreviousNode,
+        nextNode: agent.suggestedNextNode
+      });
+    } else {
+      openWindow(appId);
+    }
+  }, [openPwaSidebar, openWindow]);
+
   // Handle squad click from speed bumps
   const handleSquadClick = useCallback((squadId: string, buttonRect?: DOMRect) => {
     if (activeSquadId === squadId) {
@@ -213,32 +238,10 @@ const Desktop: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         >
           <div className="pointer-events-auto w-full h-full relative">
             <SphereImageGrid
-              apps={getSphereApps(projectFolders)}
+              apps={sphereApps}
               containerSize={725}
               sphereRadius={350}
-              onAppClick={(appId) => {
-                const agent = NEXUS_AGENTS.find(a => a.id === appId);
-                if (agent) {
-                  // Map NexusAgent to the expected PWA sidebar type
-                  openPwaSidebar({
-                    id: agent.id,
-                    label: agent.name,
-                    parentLabel: agent.category,
-                    parentSquadId: agent.squadId,
-                    role: agent.role,
-                    pain: agent.toolCard?.useThisWhen?.join(", "),
-                    purpose: agent.toolCard?.purpose,
-                    mission: agent.description,
-                    inputs: agent.toolCard?.inputNeeded,
-                    deliverables: agent.toolCard?.outputDelivered,
-                    oracleInsight: agent.oracleInsight,
-                    prevNode: agent.suggestedPreviousNode,
-                    nextNode: agent.suggestedNextNode
-                  });
-                } else {
-                  openWindow(appId);
-                }
-              }}
+              onAppClick={handleSphereAppClick}
               perspective={50}
               perspectiveOrigin="100% 50%"
               autoRotateSpeed={.1}

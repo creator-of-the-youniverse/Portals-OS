@@ -29,6 +29,7 @@ import { randomBytes } from "crypto";
 import { consumeVerificationToken as defaultConsumeVerificationToken } from "../../../lib/emailVerification.ts";
 import { createSession as defaultCreateSession } from "../../../lib/neonSession.ts";
 import {
+  assertHandoffSigningConfigured,
   signHandoffToken as defaultSignHandoffToken,
   isProductionRuntime,
 } from "../../../lib/cryptoHandoff.ts";
@@ -113,6 +114,11 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
   const consumeVerificationTokenFn = deps.consumeVerificationToken ?? defaultConsumeVerificationToken;
   const createSessionFn = deps.createSession ?? defaultCreateSession;
   const signHandoffTokenFn = deps.signHandoffToken ?? defaultSignHandoffToken;
+
+  // ── 0. Validate handoff signing configuration BEFORE consuming token ────
+  if (!deps.signHandoffToken) {
+    assertHandoffSigningConfigured();
+  }
 
   // ── 1. Consume the verification token ───────────────────────────────────
   const consumeResult = await consumeVerificationTokenFn(sql, token.trim());

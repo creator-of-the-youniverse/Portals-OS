@@ -38,20 +38,33 @@ self.addEventListener('activate', (event) => {
 
 // Fetch: Offline resilience strategy
 self.addEventListener('fetch', (event) => {
+  // Only handle HTTP/HTTPS GET requests; let browser handle WebSockets and other protocols
+  if (!event.request.url.startsWith('http') || event.request.method !== 'GET') {
+    return;
+  }
+
   const url = new URL(event.request.url);
 
-  // Bypass API proxy requests and non-GET requests from service worker caching
-  if (event.request.method !== 'GET' || url.pathname.startsWith('/api/')) {
+  // Strictly decline cross-origin requests and local /api/ proxy routes
+  // This allows Supabase, Stripe, audio streams, and third-party APIs to bypass SW caching completely
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
     return;
   }
 
   // HTML / Navigation requests: Network-first, fallback to cached index.html
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
-        .catch(() => {
-          return caches.match('/index.html');
-        })
+      fetch(event.request).catch(async () => {
+        const cached = await caches.match('/index.html');
+        return (
+          cached ||
+          new Response('Offline - Youniverse', {
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'text/plain' },
+          })
+        );
+      })
     );
     return;
   }
@@ -71,7 +84,16 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => cachedResponse);
 
-      return cachedResponse || fetchPromise;
+      // Return cached response immediately if available
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      // If no cache hit, wait for network fetch; if network also fails, return fallback Response instead of undefined
+      return fetchPromise.then((networkRes) => {
+        if (networkRes) return networkRes;
+        return new Response(null, { status: 504, statusText: 'Gateway Timeout' });
+      });
     })
   );
 });

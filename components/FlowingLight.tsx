@@ -420,29 +420,95 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
         };
     }, []);
 
-    const interactiveElementsRef = useRef<HTMLElement[]>([]);
+    interface CachedInteractiveElement {
+        el: HTMLElement;
+        edges: { x: number; y: number }[];
+    }
 
-    // Periodically update the list of interactive elements to avoid DOM scanning on every frame
+    const interactiveElementsRef = useRef<CachedInteractiveElement[]>([]);
+
+    // Periodically update the list of interactive elements and cache their rects
+    // to avoid synchronous DOM layout reflows (getBoundingClientRect) on every animation frame
     useEffect(() => {
         const scanElements = () => {
-            // Focus on common interactive tags and elements with specific data/role attributes
-            // Scanning 'body *' on every frame was the source of the performance drop
-            const allElements = Array.from(document.querySelectorAll('button, a, input, [role="button"], [data-one], .cursor-pointer')) as HTMLElement[];
-            interactiveElementsRef.current = allElements.filter(el => {
+            if (typeof document === 'undefined' || document.hidden) return;
+            const containerRect = containerRef.current?.getBoundingClientRect();
+            if (!containerRect) return;
+
+            const allElements = Array.from(
+                document.querySelectorAll('button, a, input, [role="button"], [data-one]')
+            ) as HTMLElement[];
+
+            const cached: CachedInteractiveElement[] = [];
+            for (let i = 0; i < allElements.length; i++) {
+                const el = allElements[i];
+                if (el.closest('.sphere-image-grid')) continue;
                 const elRect = el.getBoundingClientRect();
-                // For fixed/absolute elements, offsetParent might be null, so we check if it has dimensions
-                // and isn't explicitly hidden by CSS.
-                const style = window.getComputedStyle(el);
-                return elRect.width > 2 && elRect.height > 2 &&
-                    style.display !== 'none' &&
-                    style.opacity !== '0' &&
-                    style.visibility !== 'hidden';
-            });
+                if (elRect.width <= 2 || elRect.height <= 2) continue;
+
+                const x = elRect.left - containerRect.left;
+                const y = elRect.top - containerRect.top;
+                const width = elRect.width;
+                const height = elRect.height;
+
+                cached.push({
+                    el,
+                    edges: [
+                        { x, y },
+                        { x: x + width, y },
+                        { x: x + width, y: y + height },
+                        { x, y: y + height },
+                    ],
+                });
+            }
+            interactiveElementsRef.current = cached;
         };
 
-        const interval = setInterval(scanElements, 1000); // Scan once per second
+        const interval = setInterval(scanElements, 1500);
         scanElements();
         return () => clearInterval(interval);
+    }, []);
+
+    const getClosestEdgeInfo = useCallback((x: number, y: number, edges: { x: number; y: number }[]) => {
+        let minDistance = Infinity;
+        let closestPoint = { x, y };
+
+        for (let i = 0; i < edges.length; i++) {
+            const p1 = edges[i];
+            const p2 = edges[(i + 1) % edges.length];
+
+            const A = x - p1.x;
+            const B = y - p1.y;
+            const C = p2.x - p1.x;
+            const D = p2.y - p1.y;
+
+            const dot = A * C + B * D;
+            const lenSq = C * C + D * D;
+            let param = -1;
+            if (lenSq !== 0) param = dot / lenSq;
+
+            let xx: number, yy: number;
+            if (param < 0) {
+                xx = p1.x;
+                yy = p1.y;
+            } else if (param > 1) {
+                xx = p2.x;
+                yy = p2.y;
+            } else {
+                xx = p1.x + param * C;
+                yy = p1.y + param * D;
+            }
+
+            const dx = x - xx;
+            const dy = y - yy;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestPoint = { x: xx, y: yy };
+            }
+        }
+
+        return { distance: minDistance, closestPoint };
     }, []);
 
     const updateLight = useCallback(() => {
@@ -459,10 +525,9 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
             targetX = canvas.width / 2;
             targetY = canvas.height / 2;
         } else {
-            // Follow mouse
-            const rect = canvas.getBoundingClientRect();
-            targetX = mouseRef.current.x - rect.left;
-            targetY = mouseRef.current.y - rect.top;
+            // Follow mouse directly
+            targetX = mouseRef.current.x;
+            targetY = mouseRef.current.y;
         }
 
         targetRef.current.x = targetX;
@@ -472,15 +537,17 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
         let closestPoint = { x: targetRef.current.x, y: targetRef.current.y };
         let newCurrentElement: HTMLElement | null = null;
 
-        // Use the cached list of elements instead of scanning the DOM
-        interactiveElementsRef.current.forEach(el => {
-            const distance = getDistanceToElementEdge(targetRef.current.x, targetRef.current.y, el);
-            if (distance < 80 && distance < closestDistance) { // Check proximity
-                closestDistance = distance;
-                closestPoint = getClosestPointOnElementEdge(targetRef.current.x, targetRef.current.y, el);
-                newCurrentElement = el;
+        // Use cached edge coordinates — zero DOM layout reads per frame
+        const cachedList = interactiveElementsRef.current;
+        for (let i = 0; i < cachedList.length; i++) {
+            const item = cachedList[i];
+            const info = getClosestEdgeInfo(targetRef.current.x, targetRef.current.y, item.edges);
+            if (info.distance < 80 && info.distance < closestDistance) {
+                closestDistance = info.distance;
+                closestPoint = info.closestPoint;
+                newCurrentElement = item.el;
             }
-        });
+        }
 
         // If the light is close to an element, update currentElementRef
         // BUT ONLY IF NOT IDLE - We don't want the ghost activating things randomly
@@ -504,7 +571,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
 
         lightRef.current.x += (destX - lightRef.current.x) * lerpFactor;
         lightRef.current.y += (destY - lightRef.current.y) * lerpFactor;
-    }, [getDistanceToElementEdge, getClosestPointOnElementEdge, generateChat, isIdle, lockTarget]);
+    }, [getClosestEdgeInfo, generateChat, isIdle, lockTarget]);
 
     const updateParticles = useCallback(() => {
         particlesRef.current.forEach((particle) => {
@@ -542,15 +609,16 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
     }, []);
 
     const updateChatMessages = useCallback(() => {
-        setChatMessages(prev =>
-            prev
+        setChatMessages(prev => {
+            if (prev.length === 0) return prev; // Avoid 60fps empty-array re-renders
+            return prev
                 .map(msg => ({
                     ...msg,
                     life: msg.life - 3, // Faster decay — 3x speed
                     opacity: Math.min((msg.life / 100) * 0.8, 0.8) // Fade quickly
                 }))
-                .filter(msg => msg.life > 0)
-        );
+                .filter(msg => msg.life > 0);
+        });
     }, []);
 
     // Listen to system/Oracle messages

@@ -120,8 +120,10 @@ export const YouuniverseRadioBar: React.FC<{ onEnterClub?: () => void }> = ({ on
         {/* Top bar with close button and live indicator */}
         <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
           <div className="flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse" />
-            <span className="text-[7px] font-mono font-bold uppercase tracking-[0.2em] text-purple-400/70">Live</span>
+            <span className={`h-1.5 w-1.5 rounded-full ${radio.isConfigured ? "bg-purple-400 animate-pulse" : "bg-zinc-500"}`} />
+            <span className="text-[7px] font-mono font-bold uppercase tracking-[0.2em] text-purple-400/70">
+              {radio.isConfigured ? "Live" : "Standby"}
+            </span>
           </div>
           <button 
             onClick={(e) => { e.stopPropagation(); setVisible(false); }}

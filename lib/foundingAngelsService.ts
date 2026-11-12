@@ -26,6 +26,8 @@ export interface ServiceDependencies {
   stripe?: Stripe;
   pool?: Pool;
   databaseUrl?: string;
+  salesEnabled?: boolean;
+  env?: Record<string, string | undefined>;
 }
 
 let globalPool: Pool | null = null;
@@ -115,6 +117,35 @@ export class FoundingAngelCapacityError extends Error {
   }
 }
 
+export class FoundingAngelSalesPausedError extends Error {
+  readonly code = "SALES_PAUSED";
+  constructor(message: string = "Founding Angels enrollment is temporarily paused.") {
+    super(message);
+    this.name = "FoundingAngelSalesPausedError";
+  }
+}
+
+export function isFoundingAngelsSalesEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  const raw = env.FOUNDING_ANGELS_SALES_ENABLED;
+  if (raw === undefined || raw === null) {
+    return true; // Default enabled
+  }
+  const val = raw.trim().toLowerCase();
+  if (val === "") {
+    return true; // Default enabled if empty/whitespace
+  }
+  if (val === "true") {
+    return true;
+  }
+  if (val === "false") {
+    return false;
+  }
+  console.warn(
+    `[FoundingAngels] Invalid FOUNDING_ANGELS_SALES_ENABLED value "${raw}". Failing closed (sales disabled).`
+  );
+  return false;
+}
+
 /**
  * 1. createFoundingAngelCheckoutSession
  *
@@ -129,6 +160,11 @@ export async function createFoundingAngelCheckoutSession(
 ): Promise<{ orderId: string; checkoutUrl: string; url: string; sessionId: string }> {
   if (!identityId || typeof identityId !== "string" || identityId.trim() === "") {
     throw new Error("Valid identityId is required.");
+  }
+
+  const salesEnabled = deps?.salesEnabled ?? isFoundingAngelsSalesEnabled(deps?.env ?? process.env);
+  if (!salesEnabled) {
+    throw new FoundingAngelSalesPausedError();
   }
 
   // Canonical base origin URL: strip trailing slashes and any appended route paths

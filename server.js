@@ -4,18 +4,26 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
-import { PrismaClient } from "@prisma/client";
 import rateLimit from "express-rate-limit";
 import { verifyJwt } from "./middleware/verifyJwt.js";
 import { weaverGenerateHandler } from "./controllers/weaverController.js";
 import { saveWeaverArtifactHandler, getWeavedWidgetsHandler } from "./controllers/notNotesController.js";
-import { getYouniverseContextHandler } from "./controllers/youniverseContextController.js";
 import { getYouniversePublicDataHandler } from "./controllers/youniversePublicController.js";
 import { proxyBrowserHandler } from "./controllers/browserProxyController.js";
+import claimHandler from "./api/claim.ts";
+import youniverseIdentityHandler from "./api/youniverseIdentity.ts";
+import verifyHandler from "./api/v1/auth/verify.ts";
+import verifyTokenHandler from "./api/verify-token.ts";
+import contextHandler from "./api/youniverse/[handle]/context.ts";
 
-dotenv.config();
+dotenv.config({ path: ".env.local", override: true });
+dotenv.config(); // fallback to .env for other keys
 
-const prisma = new PrismaClient();
+// Ensure local development exclusively targets the isolated test database
+if (process.env.LOCAL_TEST_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.LOCAL_TEST_DATABASE_URL;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -367,151 +375,27 @@ app.post("/api/gemini:generate", async (req, res) => {
 });
 
 // ============================================================================
-// FIRST-TOUCH ONBOARDING — AUTH ENDPOINTS (PRISMA DB)
+// NEON NATIVE AUTH & CLAIM ENDPOINTS (LOCAL DEV DELEGATION)
 // ============================================================================
 
-// POST /api/v1/auth/claim — Create User & Youniverse
-app.post("/api/v1/auth/claim", async (req, res) => {
-  const { handle, email } = req.body;
-
-  if (!handle || !email) {
-    return res.status(400).json({ success: false, error: "Handle and email are required" });
-  }
-
-  const handleRegex = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
-  if (!handleRegex.test(handle)) {
-    return res.status(400).json({ success: false, error: "Invalid handle format" });
-  }
-
-  try {
-    // 1. Check if Handle is taken
-    const existingHandle = await prisma.youniverse.findUnique({
-      where: { handle }
-    });
-    
-    if (existingHandle) {
-      return res.status(409).json({ success: false, error: "Handle already claimed" });
-    }
-
-    // 2. Check "One Free Youniverse" rule via Email
-    let user = await prisma.user.findUnique({
-      where: { email },
-      include: { youniverses: true }
-    });
-
-    if (user && user.youniverses.length > 0) {
-      return res.status(402).json({ success: false, error: "payment_required" });
-    }
-
-    // 3. Create User if they don't exist
-    if (!user) {
-      user = await prisma.user.create({
-        data: { email }
-      });
-    }
-
-    // 4. Create the Youniverse (Provisional/Free Tier)
-    const newYouniverse = await prisma.youniverse.create({
-      data: {
-        handle,
-        ownerId: user.id,
-        isPrimary: true,
-        tier: "FREE"
-      }
-    });
-
-    // 5. Create a provisional session token (magic link equivalent)
-    const sessionToken = `prov_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-    
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour expiry
-
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken: sessionToken,
-        expiresAt,
-        userAgent: req.headers['user-agent'] || null,
-      }
-    });
-
-    console.log(`[AUTH DB] Provisional tenant created: @${handle} (${email})`);
-    console.log(`[AUTH DB] Verification link would be: /api/v1/auth/verify?token=${sessionToken}`);
-
-    res.json({
-      success: true,
-      subdomain: `${handle}.itsyouonline.com`,
-      sessionToken,
-    });
-  } catch (error) {
-    console.error("[AUTH ERROR]", error);
-    res.status(500).json({ success: false, error: "Internal Server Error" });
-  }
+// POST /api/claim — Neon DB Claim Handler
+app.post("/api/claim", async (req, res) => {
+  return claimHandler(req, res);
 });
 
-// GET /api/v1/auth/verify — Verify email via session token
+// GET /api/youniverseIdentity — Neon DB Identity Lookup
+app.get("/api/youniverseIdentity", async (req, res) => {
+  return youniverseIdentityHandler(req, res);
+});
+
+// GET /api/v1/auth/verify — Neon-native hash-backed session & email verification
 app.get("/api/v1/auth/verify", async (req, res) => {
-  const { token } = req.query;
-
-  if (!token) {
-    return res.status(400).json({ success: false, error: "Token is required" });
-  }
-
-  try {
-    const session = await prisma.session.findUnique({
-      where: { refreshToken: token },
-      include: { user: { include: { youniverses: true } } }
-    });
-
-    if (!session || session.expiresAt < new Date() || session.revokedAt) {
-      return res.status(404).json({ success: false, error: "Invalid or expired token" });
-    }
-
-    // Upgrade User to verified
-    if (!session.user.emailVerified) {
-      await prisma.user.update({
-        where: { id: session.userId },
-        data: { emailVerified: new Date() }
-      });
-    }
-
-    const primaryHandle = session.user.youniverses[0]?.handle || "unknown";
-    console.log(`[AUTH DB] Email verified: @${primaryHandle} upgraded to AUTHENTICATED_OWNER`);
-
-    res.json({
-      success: true,
-      handle: primaryHandle,
-      role: "AUTHENTICATED_OWNER",
-    });
-  } catch (error) {
-    console.error("[AUTH VERIFY ERROR]", error);
-    res.status(500).json({ success: false, error: "Internal Server Error" });
-  }
+  return verifyHandler(req, res);
 });
 
-// GET /api/v1/auth/availability — Check handle availability
-app.get("/api/v1/auth/availability", async (req, res) => {
-  const { handle } = req.query;
-
-  if (!handle) {
-    return res.status(400).json({ available: false, error: "Handle is required" });
-  }
-
-  try {
-    const existing = await prisma.youniverse.findUnique({
-      where: { handle }
-    });
-
-    res.json({
-      available: !existing,
-      handle,
-      subdomain: `${handle}.itsyouonline.com`,
-    });
-  } catch (error) {
-    console.error("[AUTH AVAILABILITY ERROR]", error);
-    // Gracefully fallback to available if DB fails (e.g. not connected yet)
-    res.json({ available: true, handle, subdomain: `${handle}.itsyouonline.com` });
-  }
+// POST /api/verify-token — RS256 handoff verification & Neon session establishment
+app.post("/api/verify-token", async (req, res) => {
+  return verifyTokenHandler(req, res);
 });
 
 // ============================================================================
@@ -577,13 +461,11 @@ app.get(
 // ============================================================================
 // YOUNIVERSE CONTEXT — SERVER-VERIFIED OWNER GATE
 // GET /api/youniverse/:handle/context
-// verifyJwt stamps req.user; handler compares req.user.youniverseId to DB row.
+// Uses Neon-native hash-backed session & identity verification
 // ============================================================================
-app.get(
-  "/api/youniverse/:handle/context",
-  verifyJwt,
-  getYouniverseContextHandler
-);
+app.get("/api/youniverse/:handle/context", async (req, res) => {
+  return contextHandler(req, res);
+});
 
 // ============================================================================
 // YOUNIVERSE PUBLIC DATA
