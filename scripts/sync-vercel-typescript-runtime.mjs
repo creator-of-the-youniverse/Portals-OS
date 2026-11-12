@@ -29,13 +29,16 @@ const REPO_ROOT = process.cwd();
 const OUTPUT_DIR = path.join(REPO_ROOT, ".vercel", "output");
 const FUNCTIONS_DIR = path.join(OUTPUT_DIR, "functions");
 
-// The 5 critical handlers that require TypeScript runtime packaging
+// Critical handlers that require TypeScript runtime packaging
 const REQUIRED_HANDLERS = [
   "api/claim.func",
+  "api/genesis/[action].func",
+  "api/stripe/[action].func",
   "api/v1/auth/verify.func",
   "api/verify-token.func",
   "api/youniverseIdentity.func",
   "api/youniverse/[handle]/context.func",
+  "api/youniverse/[handle]/public.func",
 ];
 
 // Regex to detect relative imports ending in .ts

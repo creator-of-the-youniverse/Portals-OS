@@ -26,7 +26,10 @@
 
 import { neon } from "@neondatabase/serverless";
 import { randomBytes } from "crypto";
-import { consumeVerificationToken as defaultConsumeVerificationToken } from "../../../lib/emailVerification.ts";
+import {
+  consumeVerificationToken as defaultConsumeVerificationToken,
+  consumeVerificationTokenWithGenesis as defaultConsumeVerificationTokenWithGenesis,
+} from "../../../lib/emailVerification.ts";
 import { createSession as defaultCreateSession } from "../../../lib/neonSession.ts";
 import {
   assertHandoffSigningConfigured,
@@ -88,10 +91,13 @@ const HANDOFF_UNAVAILABLE_BODY = {
 
 export interface VerifyHandlerDeps {
   sql?: any;
+  pool?: any;
   databaseUrl?: string;
   consumeVerificationToken?: typeof defaultConsumeVerificationToken;
+  consumeVerificationTokenWithGenesis?: typeof defaultConsumeVerificationTokenWithGenesis;
   createSession?: typeof defaultCreateSession;
   signHandoffToken?: typeof defaultSignHandoffToken;
+  isProduction?: boolean;
 }
 
 export default async function handler(req: any, res: any, deps: VerifyHandlerDeps = {}) {
@@ -120,8 +126,17 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
     assertHandoffSigningConfigured();
   }
 
-  // ── 1. Consume the verification token ───────────────────────────────────
-  const consumeResult = await consumeVerificationTokenFn(sql, token.trim());
+  // ── 1. Consume the verification token (atomic with Genesis evaluation when transactional) ─
+  const consumeResult = deps.consumeVerificationToken
+    ? await deps.consumeVerificationToken(sql, token.trim())
+    : deps.pool || (!deps.sql && databaseUrl)
+      ? await (deps.consumeVerificationTokenWithGenesis ?? defaultConsumeVerificationTokenWithGenesis)({
+          pool: deps.pool,
+          databaseUrl: deps.pool ? undefined : databaseUrl,
+          rawToken: token.trim(),
+          isProduction: deps.isProduction ?? isProductionRuntime(),
+        })
+      : await defaultConsumeVerificationToken(sql, token.trim());
 
   if (!consumeResult.ok) {
     if (consumeResult.reason === "already_consumed") {

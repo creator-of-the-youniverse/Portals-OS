@@ -11,9 +11,18 @@
  *  - Session tokens cannot be passed to consumeVerificationToken.
  */
 
-import { type NeonQueryFunction } from "@neondatabase/serverless";
+import { Pool, neonConfig, type NeonQueryFunction } from "@neondatabase/serverless";
 import { randomBytes } from "crypto";
 import { hashToken } from "./neonSession.ts";
+import {
+  tryAwardGenesis001InTransaction,
+  type GenesisAwardRecord,
+  type QueryRunner,
+} from "./genesisService.ts";
+
+if (typeof globalThis.WebSocket !== "undefined" && !neonConfig.webSocketConstructor) {
+  neonConfig.webSocketConstructor = globalThis.WebSocket;
+}
 
 export interface CreateVerificationTokenOptions {
   ttlSeconds?: number;
@@ -25,11 +34,21 @@ export type VerificationConsumeResult =
       identityId: string;
       username: string;
       email: string;
+      genesisAwarded?: boolean;
+      genesisAward?: GenesisAwardRecord;
     }
   | {
       ok: false;
       reason: "not_found" | "expired" | "already_consumed" | "identity_not_found";
     };
+
+export interface ConsumeWithGenesisOptions {
+  pool?: { connect(): Promise<QueryRunner & { release(): void }> };
+  databaseUrl?: string;
+  rawToken: string;
+  isProduction: boolean;
+  beforeCommitHook?: (client: QueryRunner) => Promise<void>;
+}
 
 /**
  * Generates an unguessable 256-bit random verification token,
@@ -175,4 +194,130 @@ export async function consumeVerificationToken(
     username: String(identityRows[0].username),
     email: String(identityRows[0].email),
   };
+}
+
+let cachedPool: Pool | null = null;
+let cachedPoolUrl: string | null = null;
+
+function getVerificationPool(databaseUrl: string): Pool {
+  if (!cachedPool || cachedPoolUrl !== databaseUrl) {
+    cachedPool = new Pool({ connectionString: databaseUrl });
+    cachedPoolUrl = databaseUrl;
+  }
+  return cachedPool;
+}
+
+/**
+ * Atomically consumes the email verification token, verifies `youniverse_identities`,
+ * evaluates Genesis 001 singleton allocation, and creates the lifetime entitlement ledger row
+ * inside a single real PostgreSQL transaction (`BEGIN ... COMMIT / ROLLBACK`).
+ */
+export async function consumeVerificationTokenWithGenesis(
+  opts: ConsumeWithGenesisOptions
+): Promise<VerificationConsumeResult> {
+  const { rawToken, isProduction, beforeCommitHook } = opts;
+  if (!rawToken || typeof rawToken !== "string" || rawToken.trim().length === 0) {
+    return { ok: false, reason: "not_found" };
+  }
+
+  const pool =
+    opts.pool ??
+    (opts.databaseUrl ? getVerificationPool(opts.databaseUrl) : null);
+
+  if (!pool) {
+    throw new Error("Pool or databaseUrl is required for transactional verification.");
+  }
+
+  const tokenHash = hashToken(rawToken.trim());
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const atomicRes = await client.query(
+      `WITH consumed_token AS (
+         UPDATE public.email_verification_tokens t
+         SET consumed_at = NOW()
+         FROM public.youniverse_identities i
+         WHERE t.identity_id = i.identity_id
+           AND t.token_hash = $1
+           AND t.consumed_at IS NULL
+           AND t.expires_at > NOW()
+         RETURNING t.id AS token_id, t.identity_id, i.username, i.email, i.identity_type, i.is_live
+       ),
+       verified_identity AS (
+         UPDATE public.youniverse_identities i
+         SET email_verified_at = COALESCE(i.email_verified_at, NOW())
+         FROM consumed_token c
+         WHERE i.identity_id = c.identity_id
+         RETURNING c.token_id, i.identity_id, c.username, c.email, c.identity_type, c.is_live, i.email_verified_at
+       )
+       SELECT token_id, identity_id, username, email, identity_type, is_live, email_verified_at
+       FROM verified_identity`,
+      [tokenHash]
+    );
+
+    if (!atomicRes?.rows || atomicRes.rows.length === 0) {
+      const tokenRes = await client.query(
+        `SELECT id, identity_id, expires_at, consumed_at
+         FROM public.email_verification_tokens
+         WHERE token_hash = $1
+         LIMIT 1`,
+        [tokenHash]
+      );
+
+      await client.query("ROLLBACK");
+
+      if (!tokenRes?.rows || tokenRes.rows.length === 0) {
+        return { ok: false, reason: "not_found" };
+      }
+
+      const tokenRecord = tokenRes.rows[0];
+      if (tokenRecord.consumed_at !== null) {
+        return { ok: false, reason: "already_consumed" };
+      }
+      if (new Date(tokenRecord.expires_at) < new Date()) {
+        return { ok: false, reason: "expired" };
+      }
+
+      return { ok: false, reason: "identity_not_found" };
+    }
+
+    const verified = atomicRes.rows[0];
+
+    const genesisRes = await tryAwardGenesis001InTransaction(client, {
+      identityId: String(verified.identity_id),
+      username: String(verified.username),
+      email: verified.email ? String(verified.email) : "",
+      identityType: verified.identity_type ? String(verified.identity_type) : "person",
+      isLive: verified.is_live !== false,
+      verificationTokenId: String(verified.token_id),
+      verifiedAt: verified.email_verified_at,
+      isProduction,
+    });
+
+    if (beforeCommitHook) {
+      await beforeCommitHook(client);
+    }
+
+    await client.query("COMMIT");
+
+    return {
+      ok: true,
+      identityId: String(verified.identity_id),
+      username: String(verified.username),
+      email: String(verified.email ?? ""),
+      genesisAwarded: genesisRes.awarded,
+      genesisAward: genesisRes.awarded ? genesisRes.award : undefined,
+    };
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // ignore rollback masking
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
 }

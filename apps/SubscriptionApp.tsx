@@ -1,12 +1,36 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Check, X } from 'lucide-react';
+import { Check, Crown, X } from 'lucide-react';
+import { useKernel } from '../store/kernel';
 
 const PaidTierApp: React.FC = () => {
+    const serverEntitlements = useKernel((state) => state.serverEntitlements);
+    const hasLifetimeGenesis = Boolean(serverEntitlements?.hasLifetimeGenesisAccess);
+
     return (
-        <div className="flex-1 w-full h-full bg-[#020617] text-white flex flex-col font-sans">
+        <div className="flex-1 w-full h-full bg-[#020617] text-white flex flex-col font-sans overflow-y-auto">
             {/* Content */}
-            <div className="flex-1 p-4 md:p-8 flex items-center justify-center">
+            <div className="flex-1 p-4 md:p-8 flex flex-col items-center justify-center gap-6">
+                {hasLifetimeGenesis && (
+                    <div className="w-full rounded-2xl border border-amber-300/35 bg-linear-to-r from-amber-400/12 via-[#0c101b] to-emerald-400/10 px-5 py-4 flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/15 border border-amber-300/35 text-amber-300">
+                                <Crown className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-mono font-bold tracking-[0.2em] uppercase text-amber-300">
+                                    GENESIS 001 · FIRST PERSON OF THE YOUNIVERSE
+                                </p>
+                                <p className="text-sm font-semibold text-white">
+                                    Lifetime first-party Portals OS entitlement is permanently active on this Youniverse.
+                                </p>
+                            </div>
+                        </div>
+                        <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-mono uppercase tracking-wider">
+                            Lifetime Unlocked
+                        </span>
+                    </div>
+                )}
                 <div className="w-full mx-auto grid grid-cols-5 gap-4 lg:gap-6">
 
                     {/* FREE */}

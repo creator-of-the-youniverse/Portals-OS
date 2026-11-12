@@ -82,6 +82,32 @@ const useKernelStore = create<KernelState>()(
       freeNodesUsed: [],
       favoriteNodes: [],
 
+      // Server-authoritative runtime entitlements (never persisted in localStorage)
+      serverEntitlements: null,
+      isGenesisReplayOpen: false,
+      isGenesisRegistryOpen: false,
+      hydrateServerEntitlements: (entitlements) =>
+        set((state) => ({
+          serverEntitlements: entitlements,
+          subscriptionTier: entitlements
+            ? entitlements.effectiveTier
+            : state.subscriptionTier,
+        })),
+      markGenesisCeremonySeen: () =>
+        set((state) => ({
+          serverEntitlements: state.serverEntitlements
+            ? {
+                ...state.serverEntitlements,
+                genesis: {
+                  ...state.serverEntitlements.genesis,
+                  ceremonyPending: false,
+                },
+              }
+            : null,
+        })),
+      setGenesisReplayOpen: (open) => set({ isGenesisReplayOpen: open }),
+      setGenesisRegistryOpen: (open) => set({ isGenesisRegistryOpen: open }),
+
       openWindow: (appId, sizeOrPayload, metadata) => {
         let size = { width: 600, height: 450 };
         let initialPayload: string | undefined;

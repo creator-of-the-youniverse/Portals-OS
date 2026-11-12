@@ -39,6 +39,12 @@ import {
   FoundingAngelsSuccess,
   FoundingAngelsCancel,
 } from "./components/founding-angels";
+import {
+  GenesisBadge,
+  GenesisCeremonyModal,
+  GenesisRegistryModal,
+  GenesisRegistryPage,
+} from "./components/genesis";
 
 const App: React.FC = () => {
   const windows = useKernel((state) => state.windows);
@@ -48,6 +54,13 @@ const App: React.FC = () => {
   const weavedWidgets = useKernel((state) => state.weavedWidgets);
 
   const isClaimRoute = identity?.kind === "claim";
+  const serverEntitlements = useKernel((state) => state.serverEntitlements);
+  const hydrateServerEntitlements = useKernel((state) => state.hydrateServerEntitlements);
+  const markGenesisCeremonySeen = useKernel((state) => state.markGenesisCeremonySeen);
+  const isGenesisReplayOpen = useKernel((state) => state.isGenesisReplayOpen);
+  const setGenesisReplayOpen = useKernel((state) => state.setGenesisReplayOpen);
+  const isGenesisRegistryOpen = useKernel((state) => state.isGenesisRegistryOpen);
+  const setGenesisRegistryOpen = useKernel((state) => state.setGenesisRegistryOpen);
 
   // Subdomain Portals OS active state.
   // Determined by a server-verified ownership check — NOT a client-side flag.
@@ -74,13 +87,19 @@ const App: React.FC = () => {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const handleVerifiedArrival = useCallback((sessionToken: string) => {
-    if (handoffReconciledRef.current) return;
-    handoffReconciledRef.current = true;
-    setHandoffPending(false);
-    setSubdomainOsActive(true);
-    setOwnerGateChecked(true);
-  }, []);
+  const handleVerifiedArrival = useCallback(
+    (_sessionToken: string, _workspaceConfig?: any, entitlements?: any) => {
+      if (handoffReconciledRef.current) return;
+      handoffReconciledRef.current = true;
+      setHandoffPending(false);
+      setSubdomainOsActive(true);
+      setOwnerGateChecked(true);
+      if (entitlements) {
+        hydrateServerEntitlements(entitlements);
+      }
+    },
+    [hydrateServerEntitlements]
+  );
 
   const handleHandoffError = useCallback((err: any) => {
     if (handoffReconciledRef.current) return;
@@ -143,11 +162,13 @@ const App: React.FC = () => {
 
         if (data.success && data.isOwner === true) {
           setSubdomainOsActive(true);
+          hydrateServerEntitlements(data.entitlements ?? null);
           // Cache confirmation so the gate only hits the server once per session.
           localStorage.setItem(`youniverse_os_active_${handle}`, "true");
         } else {
           // Valid token but different owner — show public view.
           setSubdomainOsActive(false);
+          hydrateServerEntitlements(null);
           localStorage.removeItem(`youniverse_os_active_${handle}`);
         }
       } catch (_err) {
@@ -193,10 +214,25 @@ const App: React.FC = () => {
     setIsLoginModalOpen(true);
   }, []);
 
-  const handleLoginSuccess = useCallback((_token: string) => {
-    setIsLoginModalOpen(false);
-    setSubdomainOsActive(true);
-  }, []);
+  const handleLoginSuccess = useCallback(
+    (token: string) => {
+      setIsLoginModalOpen(false);
+      setSubdomainOsActive(true);
+      if (token) {
+        fetch("/api/genesis/status", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.success && data.entitlements) {
+              hydrateServerEntitlements(data.entitlements);
+            }
+          })
+          .catch(() => {});
+      }
+    },
+    [hydrateServerEntitlements]
+  );
 
   const viewPublicShowcase = useCallback(() => {
     setSubdomainOsActive(false);
@@ -451,6 +487,7 @@ const App: React.FC = () => {
       typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).get("canceled") === "true");
   const isFoundingAngelsOffer = currentPath === "/founding-angels" && !isFoundingAngelsCancel;
+  const isGenesisRegistryRoute = currentPath === "/genesis";
 
   const showClaimRoute = isClaimRoute;
 
@@ -494,6 +531,14 @@ const App: React.FC = () => {
       ) : isFoundingAngelsOffer ? (
         <FoundingAngelsOffer
           key="fa-offer"
+          onNavigate={(path: string) => {
+            window.history.pushState({}, "", path);
+            setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
+          }}
+        />
+      ) : isGenesisRegistryRoute ? (
+        <GenesisRegistryPage
+          key="genesis-registry"
           onNavigate={(path: string) => {
             window.history.pushState({}, "", path);
             setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
@@ -658,6 +703,13 @@ const App: React.FC = () => {
             <div className="fixed top-2.5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full border border-purple-500/40 bg-black/70 px-3.5 py-1 text-xs text-purple-200 backdrop-blur-md shadow-[0_0_20px_rgba(168,85,247,0.3)]">
               <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
               <span className="font-mono font-medium">@{identity?.username} Portals OS</span>
+              {serverEntitlements?.genesis?.isWinner && (
+                <GenesisBadge
+                  variant="pill"
+                  onClick={() => setGenesisRegistryOpen(true)}
+                  className="py-0.5 px-2.5 text-[10px]"
+                />
+              )}
               <button
                 onClick={viewPublicShowcase}
                 className="ml-2 rounded-md bg-white/10 px-2 py-0.5 text-[10px] text-white/70 hover:bg-white/20 hover:text-white transition-colors"
@@ -717,8 +769,27 @@ const App: React.FC = () => {
           onError={handleHandoffError}
         />
       )}
+      {subdomainOsActive &&
+        serverEntitlements?.genesis?.isWinner &&
+        !showArrivalCeremony &&
+        (serverEntitlements.genesis.ceremonyPending || isGenesisReplayOpen) && (
+          <GenesisCeremonyModal
+            isOpen={true}
+            handle={identity?.username || ""}
+            mode={isGenesisReplayOpen && !serverEntitlements.genesis.ceremonyPending ? "replay" : "claim"}
+            onAcknowledgeComplete={() => {
+              markGenesisCeremonySeen();
+              setGenesisReplayOpen(false);
+            }}
+            onCloseReplay={() => setGenesisReplayOpen(false)}
+          />
+        )}
+      <GenesisRegistryModal
+        isOpen={isGenesisRegistryOpen}
+        onClose={() => setGenesisRegistryOpen(false)}
+      />
       <Analytics />
-      {!(isFoundingAngelsSuccess || isFoundingAngelsCancel || isFoundingAngelsOffer) && (
+      {!(isFoundingAngelsSuccess || isFoundingAngelsCancel || isFoundingAngelsOffer || isGenesisRegistryRoute) && (
         <PwaInstallPrompt />
       )}
     </ClubRadioProvider>

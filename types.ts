@@ -46,6 +46,27 @@ export interface WeavedWidget {
   dependencies: string[];
 }
 
+export interface ServerEntitlementsSnapshot {
+  identityId: string;
+  basePlan: string;
+  effectiveTier: "free" | "squad+" | "platoon";
+  hasLifetimeGenesisAccess: boolean;
+  unlockedAllNodes: boolean;
+  unlockedAllSquads: boolean;
+  genesis: {
+    isWinner: boolean;
+    officialTitle: string | null;
+    designation: string | null;
+    awardedAt: string | null;
+    ceremonyPending: boolean;
+  };
+  foundingAngel: {
+    isMember: boolean;
+    memberNumber: number | null;
+    status: string | null;
+  };
+}
+
 export interface KernelState {
   windows: WindowInstance[];
   activeWindowId: string | null;
@@ -220,6 +241,15 @@ export interface KernelState {
     location: { tower: string; shelf: string; book: string; page: string },
     summary: string
   ) => Promise<boolean>;
+
+  // Server-authoritative entitlement hydration (ephemeral runtime state, never persisted as authority)
+  serverEntitlements: ServerEntitlementsSnapshot | null;
+  isGenesisReplayOpen: boolean;
+  isGenesisRegistryOpen: boolean;
+  hydrateServerEntitlements: (entitlements: ServerEntitlementsSnapshot | null) => void;
+  markGenesisCeremonySeen: () => void;
+  setGenesisReplayOpen: (open: boolean) => void;
+  setGenesisRegistryOpen: (open: boolean) => void;
 
   // First-Touch Onboarding
   onboarding: OnboardingState;

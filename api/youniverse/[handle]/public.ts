@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless";
+import { getPublicBadgesForIdentity } from "../../../lib/genesisService.ts";
 
 export default async function handler(req: any, res: any, deps: any = {}) {
   if (req.method !== "GET") {
@@ -44,7 +45,7 @@ export default async function handler(req: any, res: any, deps: any = {}) {
   try {
     const sql = deps.sql ?? neon(databaseUrl);
     const rows = await sql`
-      SELECT username, display_name, subdomain, identity_type, plan, is_live
+      SELECT identity_id, username, display_name, subdomain, identity_type, plan, is_live
       FROM youniverse_identities
       WHERE username = ${handle}
       LIMIT 1
@@ -58,6 +59,9 @@ export default async function handler(req: any, res: any, deps: any = {}) {
     }
 
     const youniverse = rows[0];
+    const badges = youniverse.identity_id
+      ? await getPublicBadgesForIdentity(sql, String(youniverse.identity_id))
+      : [];
 
     return res.status(200).json({
       success: true,
@@ -67,6 +71,7 @@ export default async function handler(req: any, res: any, deps: any = {}) {
         subdomain: String(youniverse.subdomain),
         type: String(youniverse.identity_type),
         plan: String(youniverse.plan ?? "free"),
+        badges,
       },
       publicWidgets: [],
     });

@@ -26,6 +26,7 @@ import {
 import { resolveYouniverseRoute, YOUNIVERSE_ROOT_DOMAIN } from "../lib/youniverseRouting.ts";
 import { resolveYouniverseConfiguration, type FoundationLaw } from "../lib/foundationSynthesis.ts";
 import { createSession } from "../lib/neonSession.ts";
+import { resolveIdentityEntitlements } from "../lib/entitlements.ts";
 
 function firstHeaderValue(value: unknown): string {
   if (Array.isArray(value)) return typeof value[0] === "string" ? value[0] : "";
@@ -189,6 +190,12 @@ export default async function handler(req: any, res: any, deps: VerifyTokenDeps 
       laws: formattedLaws,
     });
 
+    const entitlements = await resolveIdentityEntitlements(
+      sql,
+      String(identity.identity_id),
+      String(identity.plan ?? "free")
+    );
+
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).json({
       success: true,
@@ -196,6 +203,7 @@ export default async function handler(req: any, res: any, deps: VerifyTokenDeps 
       sessionToken: rawToken,
       expiresAt: expiresAt.toISOString(),
       workspaceConfig,
+      entitlements,
     });
   } catch (err: any) {
     console.error("[/api/verify-token] Execution error:", err);

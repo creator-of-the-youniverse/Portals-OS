@@ -24,7 +24,7 @@ interface ArrivalCeremonyProps {
   handle: string;
   onDismiss: () => void;
   onConfigResolved?: (config: WorkspaceConfig) => void;
-  onVerified?: (sessionToken: string, workspaceConfig: WorkspaceConfig) => void;
+  onVerified?: (sessionToken: string, workspaceConfig: WorkspaceConfig, entitlements?: any) => void;
   onError?: (error: string) => void;
 }
 
@@ -86,7 +86,7 @@ export const ArrivalCeremony: React.FC<ArrivalCeremonyProps> = ({
             localStorage.setItem("youniverse_session_token", validSessionToken);
             localStorage.setItem("weaver_jwt", validSessionToken);
             localStorage.setItem("active_youniverse_handle", handle);
-            onVerified?.(validSessionToken, data.workspaceConfig);
+            onVerified?.(validSessionToken, data.workspaceConfig, data.entitlements);
           } else {
             const errMsg = data?.error || (res.status === 401 ? "Unauthorized handoff" : "Verification failed");
             console.warn("[ArrivalCeremony] verify-token unsuccessful:", res.status, errMsg);

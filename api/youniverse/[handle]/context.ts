@@ -23,6 +23,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import { validateSession } from "../../../lib/neonSession.ts";
+import { resolveIdentityEntitlements } from "../../../lib/entitlements.ts";
 
 export default async function handler(req: any, res: any, deps: any = {}) {
   if (req.method !== "GET") {
@@ -111,6 +112,14 @@ export default async function handler(req: any, res: any, deps: any = {}) {
 
   const isOwner = isMatch && isVerified;
 
+  const entitlements = isOwner
+    ? await resolveIdentityEntitlements(
+        sql,
+        String(youniverse.identity_id),
+        String(youniverse.plan ?? "free")
+      )
+    : undefined;
+
   console.log(
     `[YouCtx] handle=@${handle} | sessionIdentityId=${validation.identityId} | dbIdentityId=${youniverse.identity_id} | isVerified=${isVerified} | isOwner=${isOwner}`
   );
@@ -119,6 +128,7 @@ export default async function handler(req: any, res: any, deps: any = {}) {
     success: true,
     isOwner,
     handle: String(youniverse.username),
-    tier: String(youniverse.plan),
+    tier: entitlements ? entitlements.effectiveTier : String(youniverse.plan),
+    ...(entitlements ? { entitlements } : {}),
   });
 }

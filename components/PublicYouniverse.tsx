@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Globe, Lock, ShieldCheck, Terminal, Cpu, ArrowUpRight } from 'lucide-react';
+import { GenesisBadge, GenesisRegistryModal } from './genesis';
 
 interface PublicYouniverseProps {
   handle: string;
@@ -21,6 +22,11 @@ export default function PublicYouniverse({ handle, onOpenLoginModal }: PublicYou
   const [widgets, setWidgets] = useState<PublicWidget[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRegistryOpen, setIsRegistryOpen] = useState(false);
+
+  const genesisBadge = Array.isArray(profile?.badges)
+    ? profile.badges.find((b: any) => b?.key === 'genesis_001')
+    : null;
 
   useEffect(() => {
     async function fetchPublicData() {
@@ -110,9 +116,28 @@ export default function PublicYouniverse({ handle, onOpenLoginModal }: PublicYou
       {/* Main Hero Section */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-16">
         <section className="text-center max-w-2xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono mb-6 shadow-inner">
-            <ShieldCheck className="w-3.5 h-3.5" /> Verified Sovereign Instance • {profile?.type || 'STANDARD'}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono shadow-inner">
+              <ShieldCheck className="w-3.5 h-3.5" /> Verified Sovereign Instance • {profile?.type || 'STANDARD'}
+            </div>
+            {genesisBadge && (
+              <GenesisBadge
+                variant="pill"
+                awardedAt={genesisBadge.awardedAt}
+                onClick={() => setIsRegistryOpen(true)}
+              />
+            )}
           </div>
+          {genesisBadge && (
+            <div className="mb-6 text-left max-w-lg mx-auto">
+              <GenesisBadge
+                variant="card"
+                handle={profile?.handle || handle}
+                awardedAt={genesisBadge.awardedAt}
+                onClick={() => setIsRegistryOpen(true)}
+              />
+            </div>
+          )}
           <h2 className="text-4xl font-extrabold tracking-tight text-white mb-4">
             Welcome to @{handle}'s Digital Domain
           </h2>
@@ -162,6 +187,11 @@ export default function PublicYouniverse({ handle, onOpenLoginModal }: PublicYou
       <footer className="border-t border-zinc-900/80 py-6 text-center text-xs text-zinc-600 font-mono bg-zinc-950">
         Powered by Portals OS • Secure Sovereign Architecture
       </footer>
+
+      <GenesisRegistryModal
+        isOpen={isRegistryOpen}
+        onClose={() => setIsRegistryOpen(false)}
+      />
     </div>
   );
 }

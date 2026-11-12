@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { useKernel } from '../../store/kernel';
 import { PORTAL_BACKGROUNDS } from '../../constants';
-import { Monitor, Palette, Cpu, Info, Shield, HardDrive, Wifi, CheckCircle2 } from 'lucide-react';
+import { Monitor, Palette, Cpu, Info, Shield, HardDrive, Wifi, CheckCircle2, Sparkles, Crown } from 'lucide-react';
+import { GenesisBadge } from '../../components/genesis';
 
 const Settings: React.FC = () => {
   const currentWallpaper = useKernel(state => state.wallpaper);
   const setWallpaper = useKernel(state => state.setWallpaper);
   const theme = useKernel(state => state.theme);
   const toggleTheme = useKernel(state => state.toggleTheme);
+  const serverEntitlements = useKernel(state => state.serverEntitlements);
+  const setGenesisReplayOpen = useKernel(state => state.setGenesisReplayOpen);
+  const setGenesisRegistryOpen = useKernel(state => state.setGenesisRegistryOpen);
   
   const [activeTab, setActiveTab] = useState('personalization');
 
@@ -192,8 +196,76 @@ const Settings: React.FC = () => {
             </div>
           )}
 
-          {/* PLACEHOLDERS FOR OTHER TABS */}
-          {['network', 'security'].includes(activeTab) && (
+          {/* SECURITY & IDENTITY TAB */}
+          {activeTab === 'security' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div>
+                <h2 className="text-2xl font-black tracking-wide mb-2">Security & Identity</h2>
+                <p className="text-white/50 text-sm">Server-authoritative Youniverse ownership, historical status, and active entitlements.</p>
+              </div>
+
+              {serverEntitlements?.genesis?.isWinner && (
+                <div className="space-y-4">
+                  <GenesisBadge
+                    variant="card"
+                    awardedAt={serverEntitlements.genesis.awardedAt}
+                    onClick={() => setGenesisRegistryOpen(true)}
+                  />
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setGenesisReplayOpen(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-300/35 text-amber-200 text-xs font-mono uppercase tracking-wider transition-colors"
+                    >
+                      <Crown className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Replay Genesis Ceremony</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGenesisRegistryOpen(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white/80 text-xs font-mono uppercase tracking-wider transition-colors"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+                      <span>View Historical Registry</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-black/30 border border-white/10 rounded-2xl p-6 space-y-4">
+                <h3 className="text-xs font-bold tracking-[0.2em] uppercase text-white/40">Entitlement Summary</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+                    <span className="text-white/40 block mb-1">EFFECTIVE TIER</span>
+                    <span className="text-white font-bold uppercase">
+                      {serverEntitlements ? serverEntitlements.effectiveTier : 'free'}
+                      {serverEntitlements?.hasLifetimeGenesisAccess ? ' (LIFETIME GENESIS 001)' : ''}
+                    </span>
+                  </div>
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+                    <span className="text-white/40 block mb-1">FOUNDING ANGELS</span>
+                    <span className="text-white font-bold uppercase">
+                      {serverEntitlements?.foundingAngel?.isMember
+                        ? `Member #${String(serverEntitlements.foundingAngel.memberNumber ?? '').padStart(3, '0')}`
+                        : 'Not Enrolled'}
+                    </span>
+                  </div>
+                </div>
+                {!serverEntitlements?.genesis?.isWinner && (
+                  <button
+                    type="button"
+                    onClick={() => setGenesisRegistryOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/75 text-xs font-mono transition-colors"
+                  >
+                    View Historical Genesis 001 Registry
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* NETWORK TAB PLACEHOLDER */}
+          {activeTab === 'network' && (
             <div className="flex flex-col items-center justify-center h-64 text-white/30 animate-in fade-in duration-500">
               <Monitor className="w-12 h-12 mb-4 opacity-50" />
               <p className="font-mono uppercase tracking-widest text-sm">Module Offline</p>
