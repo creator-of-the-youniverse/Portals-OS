@@ -30,6 +30,7 @@ import {
   consumeVerificationToken as defaultConsumeVerificationToken,
   consumeVerificationTokenWithGenesis as defaultConsumeVerificationTokenWithGenesis,
 } from "../../../lib/emailVerification.ts";
+import { isProductionGenesisRuntime } from "../../../lib/genesisService.ts";
 import { createSession as defaultCreateSession } from "../../../lib/neonSession.ts";
 import {
   assertHandoffSigningConfigured,
@@ -134,7 +135,7 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
           pool: deps.pool,
           databaseUrl: deps.pool ? undefined : databaseUrl,
           rawToken: token.trim(),
-          isProduction: deps.isProduction ?? isProductionRuntime(),
+          isProduction: deps.isProduction === false ? false : isProductionGenesisRuntime(),
         })
       : await defaultConsumeVerificationToken(sql, token.trim());
 

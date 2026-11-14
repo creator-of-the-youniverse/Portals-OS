@@ -103,12 +103,17 @@ export function isEligibleGenesisEmail(email: string | null | undefined): boolea
 }
 
 /**
- * True only when executing in Production runtime (fail-closed for local/dev/preview).
+ * True ONLY when executing in genuine Vercel Production runtime.
+ * Fail-closed:
+ *  - Only VERCEL_ENV === "production" authorizes Genesis operations.
+ *  - VERCEL_ENV === "preview" is strictly rejected (even if NODE_ENV === "production").
+ *  - Local development / unconfigured VERCEL_ENV is strictly rejected.
+ *  - NODE_ENV === "production" alone NEVER authorizes Genesis allocation.
  */
 export function isProductionGenesisRuntime(
   env: Record<string, string | undefined> = process.env
 ): boolean {
-  return env.VERCEL_ENV === "production" || env.NODE_ENV === "production";
+  return env.VERCEL_ENV === "production";
 }
 
 function isUndefinedTableError(err: any): boolean {
@@ -159,7 +164,7 @@ export async function tryAwardGenesis001InTransaction(
   client: QueryRunner,
   params: TryAwardGenesisParams
 ): Promise<TryAwardGenesisResult> {
-  if (!params.isProduction) {
+  if (!params.isProduction || !isProductionGenesisRuntime()) {
     return { awarded: false, reason: "non_production_environment" };
   }
   if (params.isLive === false) {
@@ -172,9 +177,36 @@ export async function tryAwardGenesis001InTransaction(
     return { awarded: false, reason: "excluded_email" };
   }
 
-  // 1. Check active program boundary (if Migration 008 applied)
+  // 1. Enforce Founding Angels platform setup prerequisite (fail-closed)
+  let faSetupCompleted = false;
+  try {
+    const faSetupRes = await client.query(
+      `SELECT is_completed, completed_at
+       FROM public.founding_angels_platform_setup
+       WHERE setup_key = $1
+       LIMIT 1`,
+      ["founding_angels"]
+    );
+    if (faSetupRes?.rows && faSetupRes.rows.length > 0) {
+      const row = faSetupRes.rows[0];
+      if (row.is_completed === true && row.completed_at) {
+        faSetupCompleted = true;
+      }
+    }
+  } catch (err: any) {
+    if (!isUndefinedTableError(err)) {
+      throw err;
+    }
+    // Table missing -> fails closed
+  }
+
+  if (!faSetupCompleted) {
+    return { awarded: false, reason: "founding_angels_setup_incomplete" };
+  }
+
+  // 2. Check program is enabled (if Migration 008 applied)
   const programRes = await client.query(
-    `SELECT is_enabled, eligible_verified_after
+    `SELECT is_enabled
      FROM public.genesis_program_state
      WHERE program_key = $1
      LIMIT 1`,
@@ -190,13 +222,7 @@ export async function tryAwardGenesis001InTransaction(
     return { awarded: false, reason: "program_disabled" };
   }
 
-  const verifiedAtMs = new Date(params.verifiedAt).getTime();
-  const cutoffMs = new Date(program.eligible_verified_after).getTime();
-  if (!Number.isFinite(verifiedAtMs) || !Number.isFinite(cutoffMs) || verifiedAtMs < cutoffMs) {
-    return { awarded: false, reason: "before_activation_cutoff" };
-  }
-
-  // 2. Singleton atomic insert — ON CONFLICT DO NOTHING guarantees 0 or 1 total winner
+  // 3. Singleton atomic insert — ON CONFLICT DO NOTHING guarantees 0 or 1 total winner
   const insertAwardRes = await client.query(
     `INSERT INTO public.genesis_awards (
        award_slot,
@@ -226,7 +252,7 @@ export async function tryAwardGenesis001InTransaction(
 
   const row = insertAwardRes.rows[0];
 
-  // 3. Grant lifetime entitlement ledger row inside the same transaction
+  // 4. Grant lifetime entitlement ledger row inside the same transaction
   await client.query(
     `INSERT INTO public.identity_entitlements (
        identity_id,
@@ -409,12 +435,12 @@ export async function getPublicGenesisRegistry(db: any): Promise<PublicGenesisRe
       awarded: Boolean(win),
       winner: win
         ? {
-            designation: String(win.award_label ?? GENESIS_DESIGNATION),
-            officialTitle: String(win.official_title ?? GENESIS_OFFICIAL_TITLE),
-            handle: String(win.handle),
-            subdomain: String(win.subdomain),
-            awardedAt: new Date(win.awarded_at).toISOString(),
-          }
+          designation: String(win.award_label ?? GENESIS_DESIGNATION),
+          officialTitle: String(win.official_title ?? GENESIS_OFFICIAL_TITLE),
+          handle: String(win.handle),
+          subdomain: String(win.subdomain),
+          awardedAt: new Date(win.awarded_at).toISOString(),
+        }
         : null,
     };
   } catch (err: any) {

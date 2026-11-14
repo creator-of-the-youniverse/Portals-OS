@@ -4,6 +4,16 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 
 process.env.HANDOFF_ALLOW_EPHEMERAL_DEV_KEYS = "1";
+process.env.VERCEL_ENV = "production";
+
+// Dedicated 2048-bit RSA test keypair for tests running with VERCEL_ENV="production"
+const testKeyPair = crypto.generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: "spki", format: "pem" },
+  privateKeyEncoding: { type: "pkcs8", format: "pem" },
+});
+process.env.HANDOFF_PRIVATE_KEY = testKeyPair.privateKey;
+process.env.HANDOFF_PUBLIC_KEY = testKeyPair.publicKey;
 
 import {
   GENESIS_OFFICIAL_TITLE,
@@ -12,6 +22,7 @@ import {
   GENESIS_ENTITLEMENT_KEY,
   isEligibleGenesisEmail,
   isProductionGenesisRuntime,
+  getGenesisStatusForIdentity,
 } from "../lib/genesisService.ts";
 import { resolveIdentityEntitlements } from "../lib/entitlements.ts";
 import { consumeVerificationTokenWithGenesis } from "../lib/emailVerification.ts";
@@ -25,7 +36,14 @@ import publicHandler from "../api/youniverse/[handle]/public.ts";
  * In-memory PostgreSQL ACID transactional simulator matching Neon schema & triggers
  * for deterministic concurrent & rollback verification.
  */
-function createTransactionalSimDb({ eligibleAfter = "2026-11-12T05:00:00.000Z" } = {}) {
+function createTransactionalSimDb({
+  eligibleAfter = "2026-11-12T05:00:00.000Z",
+  foundingAngelsPlatformSetup = {
+    setup_key: "founding_angels",
+    is_completed: true,
+    completed_at: "2026-11-11T20:00:00.000Z",
+  },
+} = {}) {
   let state = {
     program: {
       program_key: "genesis_001",
@@ -35,6 +53,9 @@ function createTransactionalSimDb({ eligibleAfter = "2026-11-12T05:00:00.000Z" }
       activated_at: eligibleAfter,
       eligible_verified_after: eligibleAfter,
     },
+    foundingAngelsPlatformSetup: foundingAngelsPlatformSetup
+      ? { ...foundingAngelsPlatformSetup }
+      : null,
     identities: new Map(),
     tokens: new Map(),
     sessions: new Map(),
@@ -49,6 +70,9 @@ function createTransactionalSimDb({ eligibleAfter = "2026-11-12T05:00:00.000Z" }
   function cloneState(s) {
     return {
       program: { ...s.program },
+      foundingAngelsPlatformSetup: s.foundingAngelsPlatformSetup
+        ? { ...s.foundingAngelsPlatformSetup }
+        : null,
       identities: new Map(Array.from(s.identities.entries()).map(([k, v]) => [k, { ...v }])),
       tokens: new Map(Array.from(s.tokens.entries()).map(([k, v]) => [k, { ...v }])),
       sessions: new Map(Array.from(s.sessions.entries()).map(([k, v]) => [k, { ...v }])),
@@ -63,6 +87,13 @@ function createTransactionalSimDb({ eligibleAfter = "2026-11-12T05:00:00.000Z" }
 
   function execOnSnapshot(snap, text, params = []) {
     const sql = text.replace(/\s+/g, " ").trim();
+
+    if (sql.includes("FROM public.founding_angels_platform_setup")) {
+      const s = snap.foundingAngelsPlatformSetup;
+      if (!s) return { rows: [] };
+      const key = params[0] ?? "founding_angels";
+      return { rows: s.setup_key === key ? [s] : [] };
+    }
 
     // Transactional token + identity CTE
     if (sql.includes("WITH consumed_token AS") && sql.includes("verified_identity AS")) {
@@ -97,6 +128,7 @@ function createTransactionalSimDb({ eligibleAfter = "2026-11-12T05:00:00.000Z" }
             identity_type: ident.identity_type,
             is_live: ident.is_live,
             email_verified_at: ident.email_verified_at,
+            created_at: ident.created_at ?? ident.email_verified_at ?? ts,
           },
         ],
       };
@@ -120,9 +152,6 @@ function createTransactionalSimDb({ eligibleAfter = "2026-11-12T05:00:00.000Z" }
       const ident = snap.identities.get(identityId);
       if (!ident || ident.is_live !== true || ident.identity_type !== "person" || !ident.email_verified_at) {
         throw new Error("DB trigger rejected ineligible identity");
-      }
-      if (new Date(ident.email_verified_at) < new Date(snap.program.eligible_verified_after)) {
-        throw new Error("DB trigger rejected identity verified before Genesis activation cutoff");
       }
       if (!isEligibleGenesisEmail(ident.email)) {
         throw new Error("DB trigger rejected excluded email");
@@ -332,6 +361,7 @@ function createTransactionalSimDb({ eligibleAfter = "2026-11-12T05:00:00.000Z" }
     isLive = true,
     identityType = "person",
     verifiedAt = null,
+    createdAt = null,
     token,
     expired = false,
   }) {
@@ -345,6 +375,7 @@ function createTransactionalSimDb({ eligibleAfter = "2026-11-12T05:00:00.000Z" }
       plan,
       is_live: isLive,
       email_verified_at: verifiedAt,
+      created_at: createdAt ?? verifiedAt ?? new Date().toISOString(),
     });
     if (token) {
       const tokenId = crypto.randomUUID();
@@ -531,56 +562,158 @@ test("5. Unverified or expired claims cannot receive Genesis 001", async () => {
 });
 
 test("6. Non-production runtime never awards Genesis 001", async () => {
+  // Pure predicate matrix
   assert.strictEqual(isProductionGenesisRuntime({ NODE_ENV: "development" }), false);
   assert.strictEqual(isProductionGenesisRuntime({ VERCEL_ENV: "preview" }), false);
   assert.strictEqual(isProductionGenesisRuntime({ VERCEL_ENV: "production" }), true);
+  assert.strictEqual(isProductionGenesisRuntime({ VERCEL_ENV: "preview", NODE_ENV: "production" }), false);
+  assert.strictEqual(isProductionGenesisRuntime({ NODE_ENV: "production" }), false);
+  assert.strictEqual(isProductionGenesisRuntime({ VERCEL_ENV: "development", NODE_ENV: "production" }), false);
+  assert.strictEqual(isProductionGenesisRuntime({}), false);
 
-  const db = createTransactionalSimDb({ eligibleAfter: "2026-11-12T00:00:00.000Z" });
-  const tok = "tok_nonprod_" + crypto.randomBytes(6).toString("hex");
-  db.seedIdentity({
-    identityId: "id_dev",
-    username: "localdev",
-    email: "realperson@gmail.com",
-    token: tok,
-  });
+  const prevVercelEnv = process.env.VERCEL_ENV;
+  const prevNodeEnv = process.env.NODE_ENV;
 
-  const res = mockReqRes({ query: { token: tok }, headers: { host: "localhost:5173" } });
-  await verifyHandler(res.req, res.res, { sql: db.sqlTag, pool: db.pool, isProduction: false });
-  assert.strictEqual(res.res.statusCode, 200);
-  assert.strictEqual(db.state.awards.size, 0);
+  try {
+    // Subtest A: Preview runtime fails closed even when NODE_ENV=production
+    process.env.VERCEL_ENV = "preview";
+    process.env.NODE_ENV = "production";
+    const dbPreview = createTransactionalSimDb({ eligibleAfter: "2026-11-12T00:00:00.000Z" });
+    const tokPrev = "tok_prev_" + crypto.randomBytes(6).toString("hex");
+    dbPreview.seedIdentity({
+      identityId: "id_prev",
+      username: "previewuser",
+      email: "previewuser@gmail.com",
+      token: tokPrev,
+    });
+    const resPrev = mockReqRes({ query: { token: tokPrev }, headers: { host: "portals-preview.vercel.app" } });
+    await verifyHandler(resPrev.req, resPrev.res, {
+      sql: dbPreview.sqlTag,
+      pool: dbPreview.pool,
+      signHandoffToken: () => "mock_handoff_token",
+    });
+    assert.strictEqual(resPrev.res.statusCode, 200);
+    assert.strictEqual(dbPreview.state.awards.size, 0, "Preview runtime must NEVER allocate Genesis 001");
+
+    // Subtest B: Local execution fails closed (VERCEL_ENV not set)
+    delete process.env.VERCEL_ENV;
+    process.env.NODE_ENV = "development";
+    const dbLocal = createTransactionalSimDb({ eligibleAfter: "2026-11-12T00:00:00.000Z" });
+    const tokLocal = "tok_local_" + crypto.randomBytes(6).toString("hex");
+    dbLocal.seedIdentity({
+      identityId: "id_local",
+      username: "localuser",
+      email: "localuser@gmail.com",
+      token: tokLocal,
+    });
+    const resLocal = mockReqRes({ query: { token: tokLocal }, headers: { host: "localhost:5173" } });
+    await verifyHandler(resLocal.req, resLocal.res, {
+      sql: dbLocal.sqlTag,
+      pool: dbLocal.pool,
+    });
+    assert.strictEqual(resLocal.res.statusCode, 200);
+    assert.strictEqual(dbLocal.state.awards.size, 0, "Local execution without VERCEL_ENV must NEVER allocate Genesis 001");
+
+    // Subtest C: Injected isProduction=true CANNOT authorize Genesis outside genuine Vercel Production
+    process.env.VERCEL_ENV = "preview";
+    process.env.NODE_ENV = "production";
+    const dbInjected = createTransactionalSimDb({ eligibleAfter: "2026-11-12T00:00:00.000Z" });
+    const tokInj = "tok_inj_" + crypto.randomBytes(6).toString("hex");
+    dbInjected.seedIdentity({
+      identityId: "id_inj",
+      username: "injecteduser",
+      email: "injecteduser@gmail.com",
+      token: tokInj,
+    });
+    const resInj = mockReqRes({ query: { token: tokInj }, headers: { host: "portals-preview.vercel.app" } });
+    await verifyHandler(resInj.req, resInj.res, {
+      sql: dbInjected.sqlTag,
+      pool: dbInjected.pool,
+      isProduction: true, // INJECTED TRUE on Preview
+      signHandoffToken: () => "mock_handoff_token",
+    });
+    assert.strictEqual(resInj.res.statusCode, 200);
+    assert.strictEqual(dbInjected.state.awards.size, 0, "Injected isProduction=true MUST NOT bypass non-production VERCEL_ENV");
+
+    // Also test direct consumeVerificationTokenWithGenesis call with injected isProduction=true on preview
+    const tokDirect = "tok_direct_" + crypto.randomBytes(6).toString("hex");
+    dbInjected.seedIdentity({
+      identityId: "id_direct",
+      username: "directuser",
+      email: "directuser@gmail.com",
+      token: tokDirect,
+    });
+    const directRes = await consumeVerificationTokenWithGenesis({
+      pool: dbInjected.pool,
+      rawToken: tokDirect,
+      isProduction: true, // INJECTED TRUE on Preview
+    });
+    assert.strictEqual(directRes.ok, true);
+    assert.strictEqual(directRes.genesisAwarded, false, "Direct consumeVerificationTokenWithGenesis with isProduction=true must reject outside genuine Production");
+    assert.strictEqual(dbInjected.state.awards.size, 0);
+
+    // Subtest D: Genuine Vercel Production passes the environment check and authorizes Genesis
+    process.env.VERCEL_ENV = "production";
+    process.env.NODE_ENV = "production";
+    const dbProd = createTransactionalSimDb({ eligibleAfter: "2026-11-12T00:00:00.000Z" });
+    const tokProd = "tok_prod_" + crypto.randomBytes(6).toString("hex");
+    dbProd.seedIdentity({
+      identityId: "id_prod",
+      username: "produser",
+      email: "produser@gmail.com",
+      token: tokProd,
+    });
+    const resProd = mockReqRes({ query: { token: tokProd }, headers: { host: "itsyouonline.com" } });
+    await verifyHandler(resProd.req, resProd.res, {
+      sql: dbProd.sqlTag,
+      pool: dbProd.pool,
+      signHandoffToken: () => "mock_handoff_token",
+    });
+    assert.strictEqual(resProd.res.statusCode, 200);
+    assert.strictEqual(dbProd.state.awards.size, 1, "Genuine Vercel Production MUST authorize Genesis 001");
+    assert.strictEqual(dbProd.state.awards.get(GENESIS_AWARD_SLOT)?.identity_id, "id_prod");
+  } finally {
+    if (prevVercelEnv !== undefined) process.env.VERCEL_ENV = prevVercelEnv; else delete process.env.VERCEL_ENV;
+    if (prevNodeEnv !== undefined) process.env.NODE_ENV = prevNodeEnv; else delete process.env.NODE_ENV;
+  }
 });
 
-test("7. All four existing historical identities remain ineligible", async () => {
-  const cutoff = "2026-11-12T05:00:00.000Z";
-  const db = createTransactionalSimDb({ eligibleAfter: cutoff });
+test("7. Internal/itsyouonline.com emails are excluded; external pre-existing users are eligible candidates", async () => {
+  const db = createTransactionalSimDb();
 
-  const historical = [
-    { id: "0XYhTLe2eQoOb40kF7ayX", handle: "trader", email: "kl@gmail.com", verifiedAt: "2026-10-27T11:17:49.031Z" },
-    { id: "iF6hqzhNHjAD7AJ_DBYkq", handle: "phase11-test-2026", email: "test@itsyouonline.com", verifiedAt: "2026-11-06T04:16:33.260Z" },
-    { id: "osrwu_ueKHulDCB50Anmw", handle: "sean", email: "it@gmail.com", verifiedAt: "2026-11-09T20:59:00.186Z" },
-    { id: "f_iLGnF9aJ5aL61BuCoFg", handle: "creatoroftheyouniverse", email: "cr@itsyouonline.com", verifiedAt: "2026-11-10T01:33:02.339Z" },
+  // Internal emails (itsyouonline.com domain) are ALWAYS excluded by email gate
+  const internalOnly = [
+    { id: "iF6hqzhNHjAD7AJ_DBYkq", handle: "phase11-test-2026", email: "test@itsyouonline.com" },
+    { id: "f_iLGnF9aJ5aL61BuCoFg", handle: "creatoroftheyouniverse", email: "cr@itsyouonline.com" },
   ];
-
-  for (const h of historical) {
+  for (const h of internalOnly) {
     const tok = `tok_hist_${h.handle}`;
-    db.seedIdentity({
-      identityId: h.id,
-      username: h.handle,
-      email: h.email,
-      verifiedAt: h.verifiedAt,
-      token: tok,
-    });
-
-    const out = await consumeVerificationTokenWithGenesis({
-      pool: db.pool,
-      rawToken: tok,
-      isProduction: true,
-    });
+    db.seedIdentity({ identityId: h.id, username: h.handle, email: h.email, token: tok });
+    const out = await consumeVerificationTokenWithGenesis({ pool: db.pool, rawToken: tok, isProduction: true });
     assert.strictEqual(out.ok, true);
-    assert.strictEqual(out.genesisAwarded, false, `Historical identity @${h.handle} must be ineligible`);
+    assert.strictEqual(out.genesisAwarded, false, `Internal email @${h.handle} must never receive Genesis 001`);
   }
 
-  assert.strictEqual(db.state.awards.size, 0);
+  // External-email pre-existing users have no special timestamp exclusion.
+  // They're legitimate candidates: whoever verifies first (with setup complete + program enabled) wins.
+  const externalHistorical = [
+    { id: "0XYhTLe2eQoOb40kF7ayX", handle: "trader", email: "kl@gmail.com" },
+    { id: "osrwu_ueKHulDCB50Anmw", handle: "sean", email: "it@gmail.com" },
+  ];
+  let firstWinner = null;
+  for (const h of externalHistorical) {
+    const tok = `tok_hist_ext_${h.handle}`;
+    db.seedIdentity({ identityId: h.id, username: h.handle, email: h.email, token: tok });
+    const out = await consumeVerificationTokenWithGenesis({ pool: db.pool, rawToken: tok, isProduction: true });
+    assert.strictEqual(out.ok, true);
+    if (firstWinner === null && out.genesisAwarded) {
+      firstWinner = h.handle;
+    }
+  }
+  // Exactly one external-historical user wins Genesis (first to verify), second does not
+  assert.strictEqual(db.state.awards.size, 1, "Exactly one Genesis 001 must be awarded among eligible external users");
+  assert.strictEqual(db.state.awards.get(GENESIS_AWARD_SLOT)?.identity_id, externalHistorical[0].id,
+    "First verifier wins Genesis 001");
 });
 
 test("8. Internal/test emails are excluded while legitimate handles are allowed", async () => {
@@ -795,5 +928,90 @@ test("14. Migration 008 DDL, Rollback guard, Ceremony copy, and Dispatcher struc
   assert.match(ceremony, /You are the First Person\./);
   assert.match(ceremony, /Your Youniverse is Genesis 001\./);
   assert.match(ceremony, /Your place in the history of The Youniverse is permanent\./);
+});
+
+test("15. Founding Angels platform setup fails closed when table, row, or completion is missing", async () => {
+  // Case A: Table/row missing entirely
+  const dbNoSetup = createTransactionalSimDb({
+    foundingAngelsPlatformSetup: null,
+  });
+  const tokA = "tok_nosetup_" + crypto.randomBytes(6).toString("hex");
+  dbNoSetup.seedIdentity({ identityId: "id_nosetup", username: "nosetup", email: "nosetup@gmail.com", token: tokA });
+  const resA = mockReqRes({ query: { token: tokA }, headers: { host: "itsyouonline.com" } });
+  await verifyHandler(resA.req, resA.res, { sql: dbNoSetup.sqlTag, pool: dbNoSetup.pool, isProduction: true });
+  assert.strictEqual(resA.res.statusCode, 200, "Verification itself succeeds");
+  assert.strictEqual(dbNoSetup.state.awards.size, 0, "Genesis 001 must NOT be awarded when setup table/record is absent");
+
+  // Case B: Table present but is_completed is false
+  const dbIncomplete = createTransactionalSimDb({
+    foundingAngelsPlatformSetup: {
+      setup_key: "founding_angels",
+      is_completed: false,
+      completed_at: null,
+    },
+  });
+  const tokB = "tok_incomp_" + crypto.randomBytes(6).toString("hex");
+  dbIncomplete.seedIdentity({ identityId: "id_incomp", username: "incomp", email: "incomp@gmail.com", token: tokB });
+  const resB = mockReqRes({ query: { token: tokB }, headers: { host: "itsyouonline.com" } });
+  await verifyHandler(resB.req, resB.res, { sql: dbIncomplete.sqlTag, pool: dbIncomplete.pool, isProduction: true });
+  assert.strictEqual(resB.res.statusCode, 200);
+  assert.strictEqual(dbIncomplete.state.awards.size, 0, "Genesis 001 must NOT be awarded when is_completed is false");
+});
+
+test("16. Genesis winner is NOT required to be an individual Founding Angel member", async () => {
+  const db = createTransactionalSimDb({
+    eligibleAfter: "2026-11-12T00:00:00.000Z",
+    foundingAngelsPlatformSetup: {
+      setup_key: "founding_angels",
+      is_completed: true,
+      completed_at: "2026-11-11T23:00:00.000Z",
+    },
+  });
+  const tok = "tok_nonmember_" + crypto.randomBytes(6).toString("hex");
+  db.seedIdentity({ identityId: "id_nonmember", username: "nonmember", email: "nonmember@gmail.com", token: tok });
+
+  // Zero founding angel memberships exist for this identity
+  assert.strictEqual(db.state.foundingMemberships.size, 0);
+
+  const res = mockReqRes({ query: { token: tok }, headers: { host: "itsyouonline.com" } });
+  await verifyHandler(res.req, res.res, { sql: db.sqlTag, pool: db.pool, isProduction: true });
+  assert.strictEqual(res.res.statusCode, 200);
+  assert.strictEqual(db.state.awards.size, 1, "Genesis 001 is awarded based on platform readiness, not individual membership");
+  assert.strictEqual(db.state.awards.get(GENESIS_AWARD_SLOT).identity_id, "id_nonmember");
+});
+
+test("17. Sibling handles and secondary identities cannot inherit Genesis 001", async () => {
+  const db = createTransactionalSimDb({
+    eligibleAfter: "2026-11-12T00:00:00.000Z",
+    foundingAngelsPlatformSetup: {
+      setup_key: "founding_angels",
+      is_completed: true,
+      completed_at: "2026-11-11T23:00:00.000Z",
+    },
+  });
+
+  const tokPrimary = "tok_primary_" + crypto.randomBytes(6).toString("hex");
+  const tokSecondary = "tok_secondary_" + crypto.randomBytes(6).toString("hex");
+
+  db.seedIdentity({ identityId: "id_primary", username: "primaryhandle", email: "owner@gmail.com", token: tokPrimary });
+  db.seedIdentity({ identityId: "id_secondary", username: "secondaryhandle", email: "owner@gmail.com", token: tokSecondary });
+
+  // 1. Primary claims and wins Genesis 001
+  const res1 = mockReqRes({ query: { token: tokPrimary }, headers: { host: "itsyouonline.com" } });
+  await verifyHandler(res1.req, res1.res, { sql: db.sqlTag, pool: db.pool, isProduction: true });
+  assert.strictEqual(db.state.awards.get(GENESIS_AWARD_SLOT)?.identity_id, "id_primary");
+
+  // 2. Secondary verifies
+  const res2 = mockReqRes({ query: { token: tokSecondary }, headers: { host: "itsyouonline.com" } });
+  await verifyHandler(res2.req, res2.res, { sql: db.sqlTag, pool: db.pool, isProduction: true });
+
+  // Secondary status check must show isWinner: false
+  const secStatus = await getGenesisStatusForIdentity(db.sqlTag, "id_secondary");
+  assert.strictEqual(secStatus.isWinner, false);
+  assert.strictEqual(secStatus.designation, null);
+
+  const primStatus = await getGenesisStatusForIdentity(db.sqlTag, "id_primary");
+  assert.strictEqual(primStatus.isWinner, true);
+  assert.strictEqual(primStatus.designation, GENESIS_DESIGNATION);
 });
 
