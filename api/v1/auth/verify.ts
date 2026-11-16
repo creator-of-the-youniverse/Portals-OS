@@ -164,14 +164,6 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
     });
   }
 
-  // ── 2. Create authenticated owner session (gateway / direct contract) ──
-  const { rawToken } = await createSessionFn(sql, consumeResult.identityId, {
-    ttlSeconds: 60 * 60 * 24 * 7, // 7 days
-    userAgent: req.headers?.["user-agent"] ?? null,
-    ipAddress: (req.headers?.["x-forwarded-for"] as string | undefined)
-      ?.split(",")[0]?.trim() ?? null,
-  });
-
   // ── 3. Issue single-use RS256 handoff ticket for destination workspace ──
   const nonce = randomBytes(24).toString("hex");
   const handoffExpiresAt = new Date(Date.now() + 90 * 1000); // 90 seconds
@@ -192,12 +184,26 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
     `;
     handoffNoncePersisted = true;
   } catch (handoffDbErr) {
-    console.warn("[/api/v1/auth/verify] Nonce insert notice (non-fatal if mock):", handoffDbErr);
+    console.error("[/api/v1/auth/verify] Handoff nonce persistence failed.");
+  }
+
+  // A missing nonce makes every ticket unredeemable. Fail closed for both
+  // browser navigations and JSON callers before creating an owner session.
+  if (!handoffNoncePersisted) {
+    return res.status(500).json(HANDOFF_UNAVAILABLE_BODY);
   }
 
   const handoffToken = signHandoffTokenFn({
     handle: consumeResult.username,
     nonce,
+  });
+
+  // ── 4. Create authenticated owner session (gateway / direct contract) ──
+  const { rawToken } = await createSessionFn(sql, consumeResult.identityId, {
+    ttlSeconds: 60 * 60 * 24 * 7, // 7 days
+    userAgent: req.headers?.["user-agent"] ?? null,
+    ipAddress: (req.headers?.["x-forwarded-for"] as string | undefined)
+      ?.split(",")[0]?.trim() ?? null,
   });
 
   const isProd = isProductionRuntime();
