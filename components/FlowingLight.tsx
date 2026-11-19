@@ -5,6 +5,7 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import { MessageSquareText } from 'lucide-react'; // Using lucide-react for icons
 import { cn } from "@/lib/utils";
 import { registerBubbleCallback } from "./speechBubbleUtils";
+import { registerAttentionCallback } from "./atomAttention";
 import { useDiagnosticObserver } from "@/hooks/useDiagnosticObserver";
 import { useBREStore } from "@/store/breStore";
 
@@ -54,172 +55,8 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
     const lastChatTimeRef = useRef(0);
     const currentElementRef = useRef<HTMLElement | null>(null);
 
-    // Global Hover Context Logic for ONE
-    const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const lastHoveredElementRef = useRef<HTMLElement | null>(null);
-    const explainedContextsRef = useRef<Set<string>>(new Set());
-    const isProcessingRef = useRef(false);
-    const lastTappedElementRef = useRef<HTMLElement | null>(null);
-    const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    useEffect(() => {
-        const handleMouseOver = (e: MouseEvent) => {
-            const target = e.target as HTMLElement;
-
-            // Skip if hovering over the canvas or chat messages (ONE's container)
-            if (target.closest('canvas') || target.closest('.bg-primary')) return;
-
-            // Try to find a meaningful description for the element
-            let context = '';
-
-            let el: HTMLElement | null = target;
-            for (let i = 0; i < 5 && el; i++) {
-                if (el.dataset.one) { context = el.dataset.one; break; }
-                if (el.title) { context = el.title; break; }
-                if (el.getAttribute('aria-label')) { context = el.getAttribute('aria-label')!; break; }
-                if (el.tagName === 'BUTTON' || el.tagName === 'A') {
-                    const text = el.innerText?.trim();
-                    if (text && text.length < 50) { context = text; break; }
-                }
-                el = el.parentElement;
-            }
-
-            if (!context) {
-                if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-                lastHoveredElementRef.current = null;
-                return;
-            }
-
-            if (lastHoveredElementRef.current === target) return;
-
-            if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-            lastHoveredElementRef.current = target;
-
-            // 0.8-Second Delay — quick enough ONE feels responsive
-            hoverTimerRef.current = setTimeout(async () => {
-                if (!isProcessingRef.current && lastHoveredElementRef.current === target) {
-                    isProcessingRef.current = true;
-
-                    try {
-                        const { showSpeechBubble } = await import('./speechBubbleUtils');
-                        
-                        // Check if we've already explained this exact context
-                        if (explainedContextsRef.current.has(context)) {
-                            // Don't repeat the same hint if we've already done it, to avoid spam
-                            return; 
-                        }
-
-                        // We import the AI generator
-                        const { generateOneAiHint } = await import('../lib/oneai');
-                        
-                        // Show a thinking indicator? Not necessary if fast.
-                        const aiHint = await generateOneAiHint(context);
-                        
-                        explainedContextsRef.current.add(context);
-                        // Prevent the cache from growing infinitely
-                        if (explainedContextsRef.current.size > 50) {
-                            const firstItem = explainedContextsRef.current.values().next().value;
-                            if (firstItem) explainedContextsRef.current.delete(firstItem);
-                        }
-
-                        showSpeechBubble(aiHint);
-                    } catch (error) {
-                        console.error("Hover generation failed", error);
-                    } finally {
-                        isProcessingRef.current = false;
-                        lastHoveredElementRef.current = null;
-                    }
-                }
-            }, 800);
-        };
-
-        const handleMouseOut = () => {
-            if (hoverTimerRef.current) {
-                clearTimeout(hoverTimerRef.current);
-                hoverTimerRef.current = null;
-                lastHoveredElementRef.current = null;
-            }
-        };
-
-        const handleMobileTapCapture = async (e: MouseEvent) => {
-            if (typeof window === 'undefined' || window.innerWidth >= 768) return;
-
-            const target = e.target as HTMLElement;
-            // Find the nearest interactive ancestor
-            let interactiveEl: HTMLElement | null = null;
-            let el: HTMLElement | null = target;
-            for (let i = 0; i < 5 && el; i++) {
-                if (el.dataset.one || el.tagName === 'BUTTON' || el.tagName === 'A' || el.classList.contains('cursor-pointer') || el.getAttribute('role') === 'button') {
-                    interactiveEl = el;
-                    break;
-                }
-                el = el.parentElement;
-            }
-
-            if (!interactiveEl) return;
-
-            // If it's the same element as last time, let the click through
-            if (lastTappedElementRef.current === interactiveEl) {
-                lastTappedElementRef.current = null;
-                if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
-                return;
-            }
-
-            // Otherwise, intercept and show hint
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-
-            lastTappedElementRef.current = interactiveEl;
-            if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
-            tapTimeoutRef.current = setTimeout(() => {
-                lastTappedElementRef.current = null;
-            }, 3000); // 3 seconds to confirm the tap
-
-            // Move orb immediately to tap location
-            const rect = canvasRef.current?.getBoundingClientRect();
-            if (rect) {
-                mouseRef.current = { x: e.clientX, y: e.clientY };
-                lightRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-            }
-
-            // Trigger hint immediately
-            let context = interactiveEl.dataset.one || interactiveEl.title || interactiveEl.getAttribute('aria-label') || interactiveEl.innerText?.trim() || "";
-            if (context) {
-                try {
-                    if (explainedContextsRef.current.has(context)) {
-                        return;
-                    }
-                    const { generateOneAiHint } = await import('../lib/oneai');
-                    const aiHint = await generateOneAiHint(context);
-                    
-                    explainedContextsRef.current.add(context);
-                    if (explainedContextsRef.current.size > 50) {
-                        const firstItem = explainedContextsRef.current.values().next().value;
-                        if (firstItem) explainedContextsRef.current.delete(firstItem);
-                    }
-
-                    const { showSpeechBubble } = await import('./speechBubbleUtils');
-                    showSpeechBubble(aiHint);
-                } catch (err) {
-                    console.error("Mobile hint failed", err);
-                }
-            }
-        };
-
-        window.addEventListener('mouseover', handleMouseOver);
-        window.addEventListener('mouseout', handleMouseOut);
-        // Using capture: true to intercept clicks before they reach component handlers
-        window.addEventListener('click', handleMobileTapCapture, { capture: true });
-
-        return () => {
-            window.removeEventListener('mouseover', handleMouseOver);
-            window.removeEventListener('mouseout', handleMouseOut);
-            window.removeEventListener('click', handleMobileTapCapture, { capture: true });
-            if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-            if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
-        };
-    }, []);
+    // Hover/tap attention and hint generation now live in AtomPresence (Atom owns intelligence;
+    // FlowingLight is embodiment only). FlowingLight just follows attention requests.
 
     // Activate BRE Diagnostic Layer
     useDiagnosticObserver();
@@ -638,46 +475,18 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
         return () => { unregister(); };
     }, []);
 
-    // Monitor Alignment for ONE's Commentary
+    // Follow Atom's attention requests (e.g. a mobile tap) without owning any listeners.
     useEffect(() => {
-        if (Math.abs(alignment.score) > 30) {
-            const isChaos = alignment.score < 0;
-            const comment = isChaos
-                ? "You seem agitated. Shall we focus?"
-                : "Your mind is clear. We are evolving.";
+        if (lockTarget) return; // orb state stays put
+        return registerAttentionCallback(({ x, y }) => {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            mouseRef.current = { x, y };
+            lightRef.current = { x: x - rect.left, y: y - rect.top };
+        });
+    }, [lockTarget]);
 
-            // Only comment occasionally
-            if (Math.random() > 0.7) {
-                setChatMessages(prev => [
-                    ...prev,
-                    {
-                        id: `bre-${Date.now()}`,
-                        text: comment,
-                        x: lightRef.current.x,
-                        y: lightRef.current.y - 60,
-                        opacity: 0.8,
-                        life: 300
-                    }
-                ]);
-            }
-        }
-    }, [alignment.score]);
-
-    // ONE's welcome message on load
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setChatMessages([{
-                id: 'welcome',
-                text: "I am ONE. Welcome to your OS.",
-                x: window.innerWidth / 2,
-                y: window.innerHeight / 2 - 100,
-                opacity: 0.7,
-                life: 300 // 5 seconds for welcome message, starts fading immediately
-            }]);
-        }, 500); // Show after half a second
-
-        return () => clearTimeout(timer);
-    }, []);
+    // Welcome now comes from AtomPresence over the speech channel (once per session).
 
     const draw = useCallback(() => {
         const canvas = canvasRef.current;
