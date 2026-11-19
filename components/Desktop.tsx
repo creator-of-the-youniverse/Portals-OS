@@ -7,6 +7,7 @@ import MatrixRain from "./MatrixRain";
 import Taskbar from "./Taskbar";
 import SphereImageGrid from "./SphereImageGrid";
 import { FlowingLight } from "./FlowingLight";
+import { AtomPresence } from "./AtomPresence";
 
 import { PortalLayout } from "./PortalLayout";
 import SpeedBumpTaskbar from "./SpeedBumpTaskbar";
@@ -395,7 +396,8 @@ const Desktop: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           }}
         />
 
-        {/* ONEAI Observer — highest layer, follows everywhere */}
+        {/* Atom: intelligence (AtomPresence) mounted once; FlowingLight is its embodiment */}
+        <AtomPresence />
         <FlowingLight
           className="fixed inset-0 z-10001 pointer-events-none bg-transparent"
           particleCount={typeof window !== 'undefined' && window.innerWidth < 768 ? 40 : 80}
