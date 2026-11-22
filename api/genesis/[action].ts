@@ -9,6 +9,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import { authenticateRequest } from "../../lib/serverlessAuth.ts";
+import { assertSafeDatabaseTarget, enforceAntiCsrf, extractTenantOriginHandle } from "../../lib/creatorOwnership.ts";
 import {
   acknowledgeGenesisCeremony,
   getPublicGenesisRegistry,
@@ -36,6 +37,9 @@ export default async function handler(req: any, res: any, deps: any = {}) {
       error: "configuration_error",
       message: "Database not configured.",
     });
+  }
+  if (!deps.sql) {
+    assertSafeDatabaseTarget(databaseUrl, deps?.env ?? process.env);
   }
 
   const sql = deps.sql ?? neon(databaseUrl!);
@@ -67,7 +71,7 @@ export default async function handler(req: any, res: any, deps: any = {}) {
 
     const auth = deps.authenticateRequest
       ? await deps.authenticateRequest(req)
-      : await authenticateRequest(req, { sql: deps.sql, databaseUrl: deps.databaseUrl });
+      : await authenticateRequest(req, { sql: deps.sql, databaseUrl: deps.databaseUrl, env: deps.env });
 
     if (!auth.ok) {
       const errAuth = auth as { status: number; error: string; message: string };
@@ -114,9 +118,34 @@ export default async function handler(req: any, res: any, deps: any = {}) {
       return res.status(405).json({ success: false, error: "method_not_allowed" });
     }
 
+    const hasOriginHeader = Boolean(req?.headers?.origin ?? req?.headers?.Origin);
+    const rawAuthHeader = req?.headers?.authorization ?? req?.headers?.Authorization;
+    const hasBearerAuth =
+      typeof rawAuthHeader === "string" &&
+      rawAuthHeader.startsWith("Bearer ") &&
+      rawAuthHeader.slice(7).trim().length > 0;
+
+    if (hasOriginHeader || !hasBearerAuth) {
+      const normalizedHeaders =
+        !req?.headers?.origin && req?.headers?.Origin
+          ? { ...req.headers, origin: req.headers.Origin }
+          : req?.headers;
+      const csrfReq = normalizedHeaders === req?.headers ? req : { ...req, headers: normalizedHeaders };
+      const csrf = enforceAntiCsrf(csrfReq, deps?.env ?? process.env, {
+        allowSameOriginTenantSubdomain: true,
+      });
+      if (csrf.blocked) {
+        return res.status(403).json({
+          success: false,
+          error: "csrf_rejected",
+          message: csrf.reason,
+        });
+      }
+    }
+
     const auth = deps.authenticateRequest
       ? await deps.authenticateRequest(req)
-      : await authenticateRequest(req, { sql: deps.sql, databaseUrl: deps.databaseUrl });
+      : await authenticateRequest(req, { sql: deps.sql, databaseUrl: deps.databaseUrl, env: deps.env });
 
     if (!auth.ok) {
       const errAuth = auth as { status: number; error: string; message: string };
@@ -124,6 +153,15 @@ export default async function handler(req: any, res: any, deps: any = {}) {
         success: false,
         error: errAuth.error,
         message: errAuth.message,
+      });
+    }
+
+    const originTenantHandle = extractTenantOriginHandle(req);
+    if (originTenantHandle && originTenantHandle !== auth.user.handle.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        error: "csrf_rejected",
+        message: "Origin tenant handle does not match authorized target Youniverse.",
       });
     }
 

@@ -1,6 +1,14 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { neon } from '@neondatabase/serverless';
 import { validateSession } from '../lib/neonSession.ts';
+import {
+    assertSafeDatabaseTarget,
+    enforceAntiCsrf,
+    extractSessionCandidatesFromRequest,
+    extractTenantOriginHandle,
+    resolveAuthorizedTargetYouniverse,
+    validateRequestSessionWithCookieFallback,
+} from '../lib/creatorOwnership.ts';
 
 // ── Server-enforced security bounds and allowlists ───────────────────────────
 export const ALLOWED_MODELS = ['gemini-1.5-flash'];
@@ -279,16 +287,34 @@ export function validateGeminiInput(body: any): GeminiValidationResult {
 }
 
 export interface GeminiHandlerDeps {
+    sql?: any;
     neon?: any;
     validateSession?: (sql: any, rawToken: string) => Promise<any>;
     GoogleGenerativeAI?: any;
     databaseUrl?: string;
     apiKey?: string;
+    env?: Record<string, string | undefined>;
 }
 
 export default async function handler(req: any, res: any, deps?: GeminiHandlerDeps) {
-    // CORS headers for local development
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const rawOrigin = req?.headers?.origin ?? req?.headers?.Origin;
+    const requestOrigin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
+    const normalizedHeaders =
+        !req?.headers?.origin && req?.headers?.Origin
+            ? { ...req.headers, origin: requestOrigin }
+            : req?.headers;
+    const csrfReq = normalizedHeaders === req?.headers ? req : { ...req, headers: normalizedHeaders };
+
+    // Trusted-origin-only CORS headers (never wildcard '*').
+    if (typeof requestOrigin === 'string' && requestOrigin.trim()) {
+        const corsCheck = enforceAntiCsrf(csrfReq, deps?.env ?? process.env, {
+            allowSameOriginTenantSubdomain: true,
+        });
+        if (!corsCheck.blocked) {
+            res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+            res.setHeader('Vary', 'Origin');
+        }
+    }
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -300,37 +326,52 @@ export default async function handler(req: any, res: any, deps?: GeminiHandlerDe
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // ── 1. Authenticate bearer session token ──────────────────────────────────
-    const authHeader = req.headers?.['authorization'] || req.headers?.['Authorization'];
-    if (typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({
-            error: 'unauthorized',
-            message: 'Valid bearer session token required.',
-        });
-    }
-    const rawToken = authHeader.slice(7).trim();
-    if (!rawToken) {
+    // ── 1. Authenticate Bearer token or __youniverse_session cookie ───────────
+    const candidates = extractSessionCandidatesFromRequest(req);
+    if (!candidates.bearerToken && !candidates.cookieToken) {
         return res.status(401).json({
             error: 'unauthorized',
             message: 'Valid bearer session token required.',
         });
     }
 
+    // Enforce anti-CSRF for all browser Origin requests and all cookie-authenticated calls.
+    const hasOriginHeader = Boolean(requestOrigin);
+    if (hasOriginHeader || !candidates.bearerToken) {
+        const csrf = enforceAntiCsrf(csrfReq, deps?.env ?? process.env, {
+            allowSameOriginTenantSubdomain: true,
+        });
+        if (csrf.blocked) {
+            return res.status(403).json({
+                error: 'csrf_rejected',
+                message: csrf.reason,
+            });
+        }
+    }
+
     const databaseUrl = deps?.databaseUrl ?? process.env.DATABASE_URL;
-    if (!databaseUrl) {
+    if (!databaseUrl && !deps?.sql) {
         return res.status(500).json({
             error: 'server_misconfiguration',
             message: 'Database not configured.',
         });
     }
+    if (!deps?.sql) {
+        assertSafeDatabaseTarget(databaseUrl, deps?.env ?? process.env);
+    }
 
     // Controlled error-handling boundary for database session store
+    let sql: any = null;
     let sessionValidation;
     try {
         const neonFactory = deps?.neon ?? neon;
-        const sql = neonFactory(databaseUrl);
+        sql = deps?.sql ?? neonFactory(databaseUrl);
         const sessionValidator = deps?.validateSession ?? validateSession;
-        sessionValidation = await sessionValidator(sql, rawToken);
+        sessionValidation = await validateRequestSessionWithCookieFallback(
+            sql,
+            req,
+            sessionValidator
+        );
     } catch (dbError: any) {
         // Safe server error: does not classify outages as invalid credentials,
         // and does not leak internal exception details or tokens to the caller
@@ -346,6 +387,45 @@ export default async function handler(req: any, res: any, deps?: GeminiHandlerDe
             error: 'invalid_token',
             message: 'Session is invalid, expired, or revoked.',
         });
+    }
+
+    const originTenantHandle = extractTenantOriginHandle(csrfReq);
+    if (originTenantHandle) {
+        let tenantAuthorized = false;
+        try {
+            const idRows = await sql`
+                SELECT identity_id, username, email, plan, is_live, email_verified_at
+                FROM youniverse_identities
+                WHERE identity_id = ${String(sessionValidation.identityId)}
+                LIMIT 1
+            `;
+            const identityRow = Array.isArray(idRows) && idRows.length > 0 ? idRows[0] : null;
+            if (identityRow) {
+                const targetAuth = await resolveAuthorizedTargetYouniverse(
+                    sql,
+                    { headers: { ...normalizedHeaders, 'x-youniverse-handle': originTenantHandle } },
+                    {
+                        identity_id: String(identityRow.identity_id),
+                        username: String(identityRow.username),
+                        human_id: sessionValidation.humanId ?? null,
+                        email: identityRow.email ?? null,
+                        plan: identityRow.plan ?? null,
+                        is_live: Boolean(identityRow.is_live),
+                        email_verified_at: identityRow.email_verified_at,
+                    },
+                    { env: deps?.env, databaseUrl }
+                );
+                tenantAuthorized = Boolean(targetAuth.ok);
+            }
+        } catch {
+            tenantAuthorized = false;
+        }
+        if (!tenantAuthorized) {
+            return res.status(403).json({
+                error: 'csrf_rejected',
+                message: 'Origin tenant handle does not match authorized target Youniverse.',
+            });
+        }
     }
 
     // ── 2. Validate request shape and enforce model allowlist / bounds ────────

@@ -21,12 +21,15 @@
 
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { createHash, randomBytes } from "crypto";
+import { assertSafeDatabaseTarget } from "./creatorOwnership.ts";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface SessionRecord {
   id: string;
   identity_id: string;
+  human_id?: string | null;
+  auth_subject_id?: string | null;
   token_hash: string;
   expires_at: Date;
   revoked_at: Date | null;
@@ -36,7 +39,7 @@ export interface SessionRecord {
 }
 
 export type SessionValidationResult =
-  | { ok: true; identityId: string; sessionId: string }
+  | { ok: true; identityId: string; sessionId: string; humanId?: string | null; authSubjectId?: string | null }
   | { ok: false; reason: "not_found" | "expired" | "revoked" };
 
 export interface CreateSessionOptions {
@@ -44,6 +47,8 @@ export interface CreateSessionOptions {
   ttlSeconds?: number;
   userAgent?: string | null;
   ipAddress?: string | null;
+  humanId?: string | null;
+  authSubjectId?: string | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -85,6 +90,34 @@ export async function createSession(
   const tokenHash = hashToken(rawToken);
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
 
+  if (opts.humanId || opts.authSubjectId) {
+    try {
+      await sql`
+        INSERT INTO sessions (
+          identity_id,
+          human_id,
+          auth_subject_id,
+          token_hash,
+          expires_at,
+          user_agent,
+          ip_address
+        )
+        VALUES (
+          ${identityId},
+          ${opts.humanId ?? null},
+          ${opts.authSubjectId ?? null},
+          ${tokenHash},
+          ${expiresAt.toISOString()},
+          ${opts.userAgent ?? null},
+          ${opts.ipAddress ?? null}
+        )
+      `;
+      return { rawToken, expiresAt };
+    } catch {
+      // Fallback to legacy columns if human_id column is not yet present
+    }
+  }
+
   await sql`
     INSERT INTO sessions (
       identity_id,
@@ -123,7 +156,7 @@ export async function validateSession(
   const tokenHash = hashToken(rawToken);
 
   const rows = await sql`
-    SELECT id, identity_id, expires_at, revoked_at
+    SELECT id, identity_id, human_id, auth_subject_id, expires_at, revoked_at
     FROM sessions
     WHERE token_hash = ${tokenHash}
     LIMIT 1
@@ -147,6 +180,8 @@ export async function validateSession(
     ok: true,
     identityId: String(row.identity_id),
     sessionId: String(row.id),
+    humanId: row.human_id ? String(row.human_id) : null,
+    authSubjectId: row.auth_subject_id ? String(row.auth_subject_id) : null,
   };
 }
 
@@ -174,7 +209,11 @@ export async function revokeSession(
  * Usage:
  *   const { createSession, validateSession } = makeSqlSession(databaseUrl);
  */
-export function makeSqlClient(databaseUrl: string) {
+export function makeSqlClient(
+  databaseUrl: string,
+  env: Record<string, string | undefined> = process.env
+) {
+  assertSafeDatabaseTarget(databaseUrl, env);
   const sql = neon(databaseUrl);
   return {
     sql,

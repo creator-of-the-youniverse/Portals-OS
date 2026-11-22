@@ -16,46 +16,30 @@
 import jwt from "jsonwebtoken";
 import { neon } from "@neondatabase/serverless";
 import { createHash } from "crypto";
+import {
+  assertSafeDatabaseTarget,
+  extractSessionCandidatesFromRequest,
+  resolveAuthorizedTargetYouniverse,
+} from "../lib/creatorOwnership.ts";
 
 function hashToken(rawToken) {
   return createHash("sha256").update(rawToken, "utf8").digest("hex");
 }
 
-/**
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- * @param {object} [deps]
- */
-export async function verifyJwt(req, res, next, deps = {}) {
-  const authHeader = req.headers["authorization"] || req.headers["Authorization"];
-
-  if (!authHeader || typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({
-      error: "unauthorized",
-      message: "Missing or malformed Authorization header.",
-    });
-  }
-
-  const token = authHeader.slice(7).trim();
-
-  if (!token) {
-    return res.status(401).json({
-      error: "unauthorized",
-      message: "Missing or malformed Authorization header.",
-    });
-  }
-
+async function verifyCandidateToken(token, req, deps) {
   // ── 1. Check Neon-native session store first ──────────────────────────────
   const databaseUrl = deps.databaseUrl || process.env.DATABASE_URL || process.env.LOCAL_TEST_DATABASE_URL;
+  if (!deps.sql && databaseUrl) {
+    assertSafeDatabaseTarget(databaseUrl, deps.env ?? process.env);
+  }
   if (databaseUrl || deps.sql) {
     try {
       const sql = deps.sql || neon(databaseUrl);
       const tokenHash = hashToken(token);
 
       const sessionRows = await sql`
-        SELECT s.id AS session_id, s.identity_id, s.expires_at, s.revoked_at,
-               i.username, i.plan, i.is_live, i.email_verified_at
+        SELECT s.id AS session_id, s.identity_id, s.human_id, s.expires_at, s.revoked_at,
+               i.username, i.email, i.plan, i.is_live, i.email_verified_at
         FROM sessions s
         JOIN youniverse_identities i ON i.identity_id = s.identity_id
         WHERE s.token_hash = ${tokenHash}
@@ -66,44 +50,82 @@ export async function verifyJwt(req, res, next, deps = {}) {
         const session = sessionRows[0];
 
         if (session.revoked_at) {
-          return res.status(401).json({
+          return {
+            ok: false,
+            terminal: false,
+            status: 401,
             error: "session_revoked",
             message: "Session has been revoked.",
-          });
+          };
         }
 
         if (new Date(session.expires_at) < new Date()) {
-          return res.status(401).json({
+          return {
+            ok: false,
+            terminal: false,
+            status: 401,
             error: "session_expired",
             message: "Session has expired.",
-          });
+          };
         }
 
         if (!session.is_live) {
-          return res.status(403).json({
+          return {
+            ok: false,
+            terminal: true,
+            status: 403,
             error: "youniverse_suspended",
             message: "This Youniverse is suspended.",
-          });
+          };
         }
 
         // Enforce verified identity requirement
         if (!session.email_verified_at) {
-          return res.status(403).json({
+          return {
+            ok: false,
+            terminal: true,
+            status: 403,
             error: "email_not_verified",
             message: "Email verification required before accessing protected features.",
-          });
+          };
         }
 
-        // Attach verified identity to request strictly scoped to this session
-        req.user = {
-          userId: String(session.identity_id),
-          youniverseId: String(session.identity_id),
-          handle: String(session.username),
-          plan: String(session.plan ?? "free"),
-          authType: "neon_session",
-        };
+        const target = await resolveAuthorizedTargetYouniverse(
+          sql,
+          req,
+          {
+            identity_id: String(session.identity_id),
+            username: String(session.username),
+            human_id: session.human_id ? String(session.human_id) : null,
+            email: session.email ? String(session.email) : null,
+            plan: session.plan ? String(session.plan) : "free",
+            is_live: Boolean(session.is_live),
+            email_verified_at: session.email_verified_at,
+          },
+          { env: deps.env, databaseUrl }
+        );
 
-        return next();
+        if (!target.ok) {
+          return {
+            ok: false,
+            terminal: true,
+            status: target.status,
+            error: target.error,
+            message: target.message,
+          };
+        }
+
+        return {
+          ok: true,
+          user: {
+            userId: String(session.identity_id),
+            humanId: session.human_id ? String(session.human_id) : null,
+            youniverseId: target.youniverseId,
+            handle: target.handle,
+            plan: target.plan ?? String(session.plan ?? "free"),
+            authType: "neon_session",
+          },
+        };
       }
     } catch (neonErr) {
       console.error("[verifyJwt] Neon session lookup error:", neonErr.message);
@@ -119,20 +141,25 @@ export async function verifyJwt(req, res, next, deps = {}) {
     try {
       decoded = jwt.verify(token, secret);
     } catch {
-      // Not a valid JWT and not a valid Neon session -> reject
-      return res.status(401).json({
+      return {
+        ok: false,
+        terminal: false,
+        status: 401,
         error: "invalid_token",
         message: "Token is invalid or has expired.",
-      });
+      };
     }
 
     const { userId, youniverseId, handle, sessionToken } = decoded || {};
 
     if (!userId || !youniverseId || !sessionToken) {
-      return res.status(401).json({
+      return {
+        ok: false,
+        terminal: false,
+        status: 401,
         error: "invalid_token",
         message: "Token payload is incomplete.",
-      });
+      };
     }
 
     try {
@@ -141,52 +168,114 @@ export async function verifyJwt(req, res, next, deps = {}) {
       });
 
       if (!session) {
-        return res.status(401).json({
+        return {
+          ok: false,
+          terminal: false,
+          status: 401,
           error: "session_not_found",
           message: "Session does not exist.",
-        });
+        };
       }
 
       if (session.revokedAt) {
-        return res.status(401).json({
+        return {
+          ok: false,
+          terminal: false,
+          status: 401,
           error: "session_revoked",
           message: "Session has been revoked.",
-        });
+        };
       }
 
       if (session.expiresAt < new Date()) {
-        return res.status(401).json({
+        return {
+          ok: false,
+          terminal: false,
+          status: 401,
           error: "session_expired",
           message: "Session has expired.",
-        });
+        };
       }
 
       if (session.userId !== userId) {
-        return res.status(401).json({
+        return {
+          ok: false,
+          terminal: false,
+          status: 401,
           error: "session_mismatch",
           message: "Token identity mismatch.",
-        });
+        };
       }
 
-      req.user = {
-        userId,
-        youniverseId,
-        handle,
-        authType: "jwt",
+      return {
+        ok: true,
+        user: {
+          userId,
+          youniverseId,
+          handle,
+          authType: "jwt",
+        },
       };
-
-      return next();
     } catch (dbErr) {
       console.error("[verifyJwt] DB error during session lookup:", dbErr);
-      return res.status(500).json({
+      return {
+        ok: false,
+        terminal: true,
+        status: 500,
         error: "auth_check_failed",
         message: "Could not verify session.",
-      });
+      };
     }
   }
 
-  return res.status(401).json({
+  return {
+    ok: false,
+    terminal: false,
+    status: 401,
     error: "invalid_token",
     message: "Token is invalid or has expired.",
+  };
+}
+
+/**
+ * @param {import('express').Request}  req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ * @param {object} [deps]
+ */
+export async function verifyJwt(req, res, next, deps = {}) {
+  const candidates = extractSessionCandidatesFromRequest(req);
+  const candidateTokens = [candidates.bearerToken, candidates.cookieToken].filter(
+    (t, idx, arr) => Boolean(t) && arr.indexOf(t) === idx
+  );
+
+  if (candidateTokens.length === 0) {
+    return res.status(401).json({
+      error: "unauthorized",
+      message: "Missing or malformed Authorization header.",
+    });
+  }
+
+  let firstFailure = null;
+  for (const token of candidateTokens) {
+    const attempt = await verifyCandidateToken(token, req, deps);
+    if (attempt.ok) {
+      req.user = attempt.user;
+      return next();
+    }
+    if (attempt.terminal) {
+      return res.status(attempt.status).json({
+        error: attempt.error,
+        message: attempt.message,
+      });
+    }
+    if (!firstFailure) {
+      firstFailure = attempt;
+    }
+  }
+
+  return res.status(firstFailure?.status ?? 401).json({
+    error: firstFailure?.error ?? "invalid_token",
+    message: firstFailure?.message ?? "Token is invalid or has expired.",
   });
 }

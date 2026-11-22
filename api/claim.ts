@@ -17,20 +17,39 @@
  */
 
 import { neon } from "@neondatabase/serverless";
+import { randomBytes } from "crypto";
 import { nanoid } from "nanoid";
 import { createVerificationToken as defaultCreateVerificationToken } from "../lib/emailVerification.ts";
 import {
   sendVerificationEmail as defaultSendVerificationEmail,
   isProductionRuntime,
 } from "../lib/emailService.ts";
+import {
+  assertHandoffSigningConfigured,
+  signHandoffToken as defaultSignHandoffToken,
+} from "../lib/cryptoHandoff.ts";
+import { YOUNIVERSE_ROOT_DOMAIN } from "../lib/youniverseRouting.ts";
+import {
+  assertSafeDatabaseTarget,
+  DESIGNATED_CREATOR_EMAIL,
+  enforceAntiCsrf,
+  evaluateCreatorClaimAuthorization,
+  extractSessionCandidatesFromRequest,
+  isUndefinedTableError,
+  recordCreatorAuditEvent,
+} from "../lib/creatorOwnership.ts";
+
+export const RESERVED_GATEWAY_HANDLES = new Set(["www", "welcome", "claim", "api"]);
 
 export interface ClaimHandlerDeps {
   sql?: any;
   databaseUrl?: string;
   createVerificationToken?: typeof defaultCreateVerificationToken;
   sendVerificationEmail?: typeof defaultSendVerificationEmail;
+  signHandoffToken?: typeof defaultSignHandoffToken;
   isProduction?: () => boolean;
   failClosedOnEmailFailure?: boolean;
+  env?: Record<string, string | undefined>;
 }
 
 export default async function handler(req: any, res: any, deps: ClaimHandlerDeps = {}) {
@@ -38,9 +57,37 @@ export default async function handler(req: any, res: any, deps: ClaimHandlerDeps
     return res.status(405).json({ status: "method-not-allowed", error: "method-not-allowed" });
   }
 
+  const hasOriginHeader = Boolean(req?.headers?.origin ?? req?.headers?.Origin);
+  const rawAuthHeader = req?.headers?.authorization ?? req?.headers?.Authorization;
+  const hasBearerAuth =
+    typeof rawAuthHeader === "string" &&
+    rawAuthHeader.startsWith("Bearer ") &&
+    rawAuthHeader.slice(7).trim().length > 0;
+  const sessionCandidates = extractSessionCandidatesFromRequest(req);
+
+  if (hasOriginHeader || (Boolean(sessionCandidates.cookieToken) && !hasBearerAuth)) {
+    const normalizedHeaders =
+      !req?.headers?.origin && req?.headers?.Origin
+        ? { ...req.headers, origin: req.headers.Origin }
+        : req?.headers;
+    const csrfReq = normalizedHeaders === req?.headers ? req : { ...req, headers: normalizedHeaders };
+    const csrf = enforceAntiCsrf(csrfReq, deps?.env ?? process.env);
+    if (csrf.blocked) {
+      return res.status(403).json({
+        success: false,
+        status: "csrf_rejected",
+        error: "csrf_rejected",
+        message: csrf.reason,
+      });
+    }
+  }
+
   const databaseUrl = deps.databaseUrl ?? process.env.DATABASE_URL;
   if (!databaseUrl && !deps.sql) {
     return res.status(500).json({ status: "configuration-error", error: "configuration-error", message: "Database not configured." });
+  }
+  if (!deps.sql) {
+    assertSafeDatabaseTarget(databaseUrl, deps?.env ?? process.env);
   }
 
   const { handle, email, displayName } = req.body ?? {};
@@ -61,6 +108,10 @@ export default async function handler(req: any, res: any, deps: ClaimHandlerDeps
     return res.status(400).json({ status: "invalid", error: "invalid", message: "Handle must be 2–50 characters." });
   }
 
+  if (RESERVED_GATEWAY_HANDLES.has(cleanHandle)) {
+    return res.status(409).json({ status: "username-taken", error: "username-taken", message: `@${cleanHandle} is already claimed.` });
+  }
+
   if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ status: "invalid", error: "invalid", message: "A valid email is required." });
   }
@@ -68,6 +119,7 @@ export default async function handler(req: any, res: any, deps: ClaimHandlerDeps
   const sql = deps.sql ?? neon(databaseUrl!);
   const createVerificationTokenFn = deps.createVerificationToken ?? defaultCreateVerificationToken;
   const sendVerificationEmailFn = deps.sendVerificationEmail ?? defaultSendVerificationEmail;
+  const signHandoffTokenFn = deps.signHandoffToken ?? defaultSignHandoffToken;
   const isProductionFn = deps.isProduction ?? isProductionRuntime;
 
   const normalizedEmail = email.toLowerCase().trim();
@@ -77,6 +129,42 @@ export default async function handler(req: any, res: any, deps: ClaimHandlerDeps
     : cleanHandle;
 
   try {
+    // ── Check server-authoritative Creator session authorization ──
+    const creatorAuth = await evaluateCreatorClaimAuthorization(sql, req, normalizedEmail, {
+      env: deps.env,
+      databaseUrl,
+    });
+
+    if (
+      !creatorAuth.authorized &&
+      (creatorAuth.status === "invalid_session" ||
+        creatorAuth.status === "forbidden" ||
+        creatorAuth.status === "environment_blocked")
+    ) {
+      return res.status(creatorAuth.httpStatus).json({
+        success: false,
+        status: creatorAuth.error,
+        error: creatorAuth.error,
+        message: creatorAuth.message,
+      });
+    }
+
+    const hasProvisionedCreatorAccount = async (): Promise<boolean> => {
+      if (normalizedEmail !== DESIGNATED_CREATOR_EMAIL) return false;
+      try {
+        const rows = await sql`
+          SELECT 1 FROM public.owner_accounts
+          WHERE primary_email = ${DESIGNATED_CREATOR_EMAIL}
+            AND is_creator = TRUE
+          LIMIT 1
+        `;
+        return Array.isArray(rows) && rows.length > 0;
+      } catch (err: any) {
+        if (isUndefinedTableError(err)) return false;
+        throw err;
+      }
+    };
+
     // ── Check if handle already exists in DB ────────────────────
     const existing = await sql`
       SELECT identity_id, username, email, email_verified_at, plan
@@ -108,28 +196,40 @@ export default async function handler(req: any, res: any, deps: ClaimHandlerDeps
         });
       }
 
-      // 3. Safe retry by the same email on an unverified handle:
-      // Verify the user has no other free claimed handle
-      const otherFreeClaims = await sql`
-        SELECT 1 FROM youniverse_identities
-        WHERE email = ${normalizedEmail}
-          AND plan = 'free'
-          AND username != ${cleanHandle}
-        LIMIT 1
-      `;
+      if (!creatorAuth.authorized) {
+        // 3. Safe retry by the same email on an unverified handle:
+        // Verify the user has no other free claimed handle
+        const otherFreeClaims = await sql`
+          SELECT 1 FROM youniverse_identities
+          WHERE email = ${normalizedEmail}
+            AND plan = 'free'
+            AND username != ${cleanHandle}
+          LIMIT 1
+        `;
 
-      if (otherFreeClaims.length > 0) {
-        return res.status(402).json({
-          status: "payment_required",
-          error: "payment_required",
-          message: "A free Youniverse has already been claimed with this email. Upgrade to create additional Youniverses.",
-        });
+        if (otherFreeClaims.length > 0 || (await hasProvisionedCreatorAccount())) {
+          return res.status(402).json({
+            status: "payment_required",
+            error: "payment_required",
+            message: "A free Youniverse has already been claimed with this email. Upgrade to create additional Youniverses.",
+          });
+        }
       }
 
       identityId = existingIdentity.identity_id;
 
-      // Update display name if provided
-      if (displayName && typeof displayName === "string") {
+      if (creatorAuth.authorized) {
+        if (!deps.signHandoffToken) {
+          assertHandoffSigningConfigured();
+        }
+        const nowIso = new Date().toISOString();
+        await sql`
+          UPDATE youniverse_identities
+          SET display_name = ${resolvedDisplayName},
+              email_verified_at = ${nowIso}
+          WHERE identity_id = ${identityId} AND email_verified_at IS NULL
+        `;
+      } else if (displayName && typeof displayName === "string") {
         await sql`
           UPDATE youniverse_identities
           SET display_name = ${resolvedDisplayName}
@@ -145,23 +245,28 @@ export default async function handler(req: any, res: any, deps: ClaimHandlerDeps
           AND consumed_at IS NULL
       `;
     } else {
-      // ── New claim: Check 'One Free Youniverse' rule via Email ──
-      const existingEmailClaims = await sql`
-        SELECT 1 FROM youniverse_identities
-        WHERE email = ${normalizedEmail} AND plan = 'free'
-        LIMIT 1
-      `;
+      if (!creatorAuth.authorized) {
+        // ── New claim: Check 'One Free Youniverse' rule via Email ──
+        const existingEmailClaims = await sql`
+          SELECT 1 FROM youniverse_identities
+          WHERE email = ${normalizedEmail} AND plan = 'free'
+          LIMIT 1
+        `;
 
-      if (existingEmailClaims.length > 0) {
-        return res.status(402).json({
-          status: "payment_required",
-          error: "payment_required",
-          message: "A free Youniverse has already been claimed with this email. Upgrade to create additional Youniverses.",
-        });
+        if (existingEmailClaims.length > 0 || (await hasProvisionedCreatorAccount())) {
+          return res.status(402).json({
+            status: "payment_required",
+            error: "payment_required",
+            message: "A free Youniverse has already been claimed with this email. Upgrade to create additional Youniverses.",
+          });
+        }
+      } else if (!deps.signHandoffToken) {
+        assertHandoffSigningConfigured();
       }
 
-      // ── Create the identity (PENDING_EMAIL_VERIFICATION) ────
+      // ── Create the identity ──────────────────────────────────
       identityId = nanoid();
+      const nowIso = new Date().toISOString();
 
       await sql`
         INSERT INTO youniverse_identities (
@@ -183,10 +288,109 @@ export default async function handler(req: any, res: any, deps: ClaimHandlerDeps
           ${"person"},
           ${normalizedEmail},
           ${"free"},
-          ${null},
-          ${new Date().toISOString()}
+          ${creatorAuth.authorized ? nowIso : null},
+          ${nowIso}
         )
       `;
+    }
+
+    // ── Authenticated verified Creator override path ─────────
+    if (creatorAuth.authorized) {
+      const verifiedAtIso = new Date().toISOString();
+
+      await sql`
+        INSERT INTO public.youniverse_owner_memberships (
+          account_id,
+          identity_id,
+          role,
+          status,
+          claim_source,
+          verified_at
+        )
+        VALUES (
+          ${creatorAuth.accountId},
+          ${identityId},
+          'owner',
+          'active',
+          ${"creator_override"},
+          ${verifiedAtIso}
+        )
+        ON CONFLICT (identity_id) DO UPDATE
+        SET account_id = EXCLUDED.account_id,
+            status = 'active',
+            claim_source = EXCLUDED.claim_source,
+            verified_at = COALESCE(public.youniverse_owner_memberships.verified_at, EXCLUDED.verified_at),
+            updated_at = NOW()
+      `;
+
+      const userAgent =
+        typeof req.headers?.["user-agent"] === "string"
+          ? req.headers["user-agent"]
+          : null;
+      const ipAddress =
+        typeof req.headers?.["x-forwarded-for"] === "string"
+          ? req.headers["x-forwarded-for"].split(",")[0]?.trim() ?? null
+          : null;
+
+      await recordCreatorAuditEvent(sql, {
+        accountId: creatorAuth.accountId,
+        actorSessionId: creatorAuth.sessionId,
+        actorIdentityId: creatorAuth.actorIdentityId,
+        targetIdentityId: identityId,
+        targetHandle: cleanHandle,
+        targetSubdomain: subdomain,
+        eventType: "creator_privileged_claim",
+        runtimeEnv: creatorAuth.runtimeEnv,
+        ipAddress,
+        userAgent,
+        metadata: {
+          displayName: resolvedDisplayName,
+        },
+      });
+
+      const nonce = randomBytes(24).toString("hex");
+      const handoffExpiresAt = new Date(Date.now() + 90 * 1000);
+      await sql`
+        INSERT INTO handoff_tokens (
+          handle,
+          nonce,
+          expires_at
+        )
+        VALUES (
+          ${cleanHandle},
+          ${nonce},
+          ${handoffExpiresAt.toISOString()}
+        )
+      `;
+
+      const handoffToken = signHandoffTokenFn({
+        handle: cleanHandle,
+        nonce,
+      });
+
+      const isProd = isProductionFn();
+      const host = String(req.headers?.host || "").toLowerCase();
+      const isLocalHost =
+        !isProd && (host.includes("localhost") || host.includes("127.0.0.1"));
+      const destinationUrl = isLocalHost
+        ? `/?@=${encodeURIComponent(cleanHandle)}#handoff_token=${encodeURIComponent(handoffToken)}`
+        : `https://${cleanHandle}.${YOUNIVERSE_ROOT_DOMAIN}/#handoff_token=${encodeURIComponent(handoffToken)}`;
+
+      if (typeof res.setHeader === "function") {
+        res.setHeader("Cache-Control", "no-store");
+      }
+
+      return res.status(201).json({
+        success: true,
+        status: "verified_creator_claim",
+        username: cleanHandle,
+        subdomain,
+        identityId,
+        handoffToken,
+        destinationUrl,
+        emailSent: false,
+        message: "Youniverse claimed and linked to your Creator account.",
+      });
     }
 
     // ── Generate dedicated email verification token ───────────

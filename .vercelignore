@@ -1,2 +1,31 @@
 api/lmstudio.ts
 api/migrate-db.ts
+api/auth/enroll.ts
+api/auth/logout.ts
+api/auth/password/
+api/auth/passkey/
+api/auth/recovery/
+api/auth/homeverse/
+api/not-notes/artifact.ts
+api/not-notes/widgets.ts
+api/youniverse/*/context.ts
+api/youniverse/*/public.ts
+
+# Block secrets, keys, tests, migrations, and non-runtime directories from Vercel context
+/scratch/
+.env
+.env.*
+*.prod
+env.prod
+*.pem
+*.key
+/tests/
+/db/
+/docs/
+/packages/
+/scripts/
+/atom-package.zip
+/hell
+/on*
+/components/CANONICAL ARCHITECTURE v2.0
+

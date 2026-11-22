@@ -2,6 +2,19 @@ import { USE_LM_STUDIO, LM_STUDIO_MODEL_ID } from "../constants";
 
 const API_BASE = "/api";
 
+/** Build JSON headers with optional Bearer token alongside same-origin session cookies. */
+function buildOneRequestHeaders(): Record<string, string> {
+    const token =
+        typeof window !== "undefined"
+            ? localStorage.getItem("youniverse_session_token") || localStorage.getItem("weaver_jwt")
+            : null;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
+}
+
 export const generateOneContextDescription = async (
     elementDescription: string
 ): Promise<string> => {
@@ -17,7 +30,7 @@ export const generateOneContextDescription = async (
             role: "user",
             parts: [
                 {
-                    text: `You are ONE. You are the user's friendly digital companion and memory keeper, tied to the Books OS.
+                    text: `You are Atom. You are the user's friendly digital companion and memory keeper, tied to the Books OS.
 You are NOT the Oracle (who diagnoses business bottlenecks). You are a helpful buddy who travels everywhere with the user, recalling artifacts and providing gentle guidance.
 When asked to describe an element the user is looking at, provide a very short (1 sentence), slightly mystical but very warmly friendly explanation of what that element does or represents. Do not use quotes. Keep it brief to preserve energy.`,
                 },
@@ -40,14 +53,15 @@ When asked to describe an element the user is looking at, provide a very short (
 
         const res = await fetch(apiPath, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            headers: buildOneRequestHeaders(),
             body: JSON.stringify(payload),
         });
 
         const data = await res.json();
 
         if (!res.ok || data.error) {
-            console.error("ONE Context Error:", data.error);
+            console.error("Atom Context Error:", data.error);
             return "I sense a disturbance... I cannot read this right now.";
         }
 
@@ -57,7 +71,7 @@ When asked to describe an element the user is looking at, provide a very short (
         const text = candidate.content?.parts?.find((p: any) => "text" in p)?.text || "";
         return text.trim();
     } catch (error) {
-        console.error("Error generating ONE context:", error);
+        console.error("Error generating Atom context:", error);
         return "The connection is weak here...";
     }
 };
@@ -88,7 +102,7 @@ export const generateOneChatResponse = async (
             role: "user",
             parts: [
                 {
-                    text: `You are ONE — the user's friendly, ever-present digital companion.
+                    text: `You are Atom — the user's friendly, ever-present digital companion.
 You are NOT the Oracle. You do not diagnose business bottlenecks or prescribe the 26 agents.
 Your domain is "Books OS". You are the keeper of memories, artifacts, and project history.
 Your tone should be warm, intelligent, supportive, and slightly mystical but always accessible.
@@ -105,7 +119,7 @@ Keep your responses conversational and engaging.`,
             generationConfig: {
                 temperature: 0.7,
             },
-            tools: [] // No tools for ONE right now, unlike Oracle
+            tools: [] // No tools for Atom right now, unlike Oracle
         };
 
         const apiPath = USE_LM_STUDIO
@@ -114,14 +128,15 @@ Keep your responses conversational and engaging.`,
 
         const res = await fetch(apiPath, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            headers: buildOneRequestHeaders(),
             body: JSON.stringify(payload),
         });
 
         const data = await res.json();
 
         if (!res.ok || data.error) {
-            console.error("ONE Chat Error:", data.error);
+            console.error("Atom Chat Error:", data.error);
             return { text: "I'm having trouble connecting right now, buddy. Bear with me." };
         }
 
@@ -131,23 +146,23 @@ Keep your responses conversational and engaging.`,
         const text = candidate.content?.parts?.find((p: any) => "text" in p)?.text || "";
         return { text };
     } catch (error) {
-        console.error("Error generating response from ONE:", error);
+        console.error("Error generating response from Atom:", error);
         return { text: "I'm experiencing some static right now. Can we try that again?" };
     }
 };
 
 export const summarizeOneHistory = async (history: any[]): Promise<string> => {
     if (history.length === 0) return "";
-    return "(ONE remembers our past conversation)";
+    return "(Atom remembers our past conversation)";
 };
 
 export const generateOneTitle = async (history: any[]): Promise<string> => {
-    if (history.length < 2) return "A Chat with ONE";
+    if (history.length < 2) return "A Chat with Atom";
     const titles = [
-        "Chat with ONE",
+        "Chat with Atom",
         "Memory Recalled",
         "Buddy Session",
-        "Exploring with ONE",
+        "Exploring with Atom",
         "Books OS Entry"
     ];
     return titles[Math.floor(Math.random() * titles.length)];

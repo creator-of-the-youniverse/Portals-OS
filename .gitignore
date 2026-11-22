@@ -35,3 +35,21 @@ dist-ssr
 .claude/
 agent/
 skills-lock.json
+
+# Production secrets & scratch workspace (NEVER commit)
+/scratch/
+.env
+.env.*
+!.env*.example
+*.prod
+env.prod
+*.pem
+*.key
+
+# Non-release stray/generated workspace artifacts
+/atom-package.zip
+/hell
+/on*
+tests/*.built.cjs
+/components/CANONICAL ARCHITECTURE v2.0
+

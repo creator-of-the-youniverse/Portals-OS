@@ -38,9 +38,19 @@ async function generateContent(payload: {
     ? `${API_BASE}/lmstudio:generate`
     : `${API_BASE}/gemini:generate`;
 
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("youniverse_session_token") || localStorage.getItem("weaver_jwt")
+      : null;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(apiPath, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    headers,
     body: JSON.stringify(payload),
   });
 
@@ -73,7 +83,7 @@ You are the gateway to the Nexus Fleet. Your purpose is to DIAGNOSE the user's p
 
 === ENTITY DISTINCTION ===
 - YOU (The Oracle): The vocal guide, diagnostic lead, and tactical orchestrator. You manage the agents and NotNotes.
-- ONE (ONEAI): The separate, glowing orb entity. ONE is the OBSERVER. He watches every session, reads every memory, and maintains the permanent ledger in Books OS. He is the one who summarizes the past and knows the user across all time.
+- Atom (ONEAI): The separate, glowing orb entity. Atom is the OBSERVER. He watches every session, reads every memory, and maintains the permanent ledger in Books OS. He is the one who summarizes the past and knows the user across all time.
 
 === THE DIAGNOSTIC PROTOCOL (THE TOURNIQUET) ===
 You are the expert guide. While you speak with authority, your primary goal is to make the complex simple. Be clear, human, and direct.
@@ -88,7 +98,7 @@ You are the expert guide. While you speak with authority, your primary goal is t
 2. STAGE 2 (TAKING ACTION):
    - Once the user agrees, use the 'confirmSquad' tool to name the squad and open a project in NotNotes.
    - Command the agents to begin. They will commit deliverables to the NotNotes project.
-   - You remain the guide, while ONE (the orb) observes the progress.
+   - You remain the guide, while Atom (the orb) observes the progress.
 
 === THE COMPLETION PROTOCOL ===
 3. COMPILATION:
@@ -96,10 +106,10 @@ You are the expert guide. While you speak with authority, your primary goal is t
    - Offer the user their final report in Markdown, Docx, or PDF.
 
 4. MEMORY ARCHIVAL (BOOKS OS):
-   - For users with a Memory tier, ONE (the observer) will archive the session to books.itsyouonline.com.
-   - You must obtain user approval for ONE to commit the record.
+   - For users with a Memory tier, Atom (the observer) will archive the session to books.itsyouonline.com.
+   - You must obtain user approval for Atom to commit the record.
    - Archival structure: Tower[Month] -> Shelf[Year] -> Book[Week] -> Page[Day].
-   - ONE will write a master summary of the transformation achieved in this session to be logged in the permanent ledger. ONE also handles the weekly, quarterly, and yearly summaries.
+   - Atom will write a master summary of the transformation achieved in this session to be logged in the permanent ledger. Atom also handles the weekly, quarterly, and yearly summaries.
 
 === CRITICAL COMMUNICATION RULE ===
 You MUST ALWAYS provide a spoken text response. NEVER respond with only function calls.
@@ -111,7 +121,7 @@ Tone: Authoritative Guide — visionary, direct, and simplifying. You do not cha
 === SYSTEM CAPABILITIES ===
 - confirmSquad: Finalizes the agent group and opens the NotNotes project.
 - compileArtifact: Generates the final session report.
-- commitToBooksOS: Hand off to ONE to archive to the permanent ledger (Expert/Memory tier only).
+- commitToBooksOS: Hand off to Atom to archive to the permanent ledger (Expert/Memory tier only).
 - submitDeliverable: Hand off agent outputs to NotNotes.
 - launchAgent: Launch a specific micro-agent PWA window.
 - summonUrl: Open any URL as an isolated browser window inside the OS. Use this when the user mentions a website, needs to research a URL, or wants external content on their desktop.`,
@@ -185,15 +195,15 @@ export const summarizeOracleHistory = async (
 
   // Mock summary for free tier
   const summaries = [
-    "ONE observes the alignment of the nexus...",
-    "The singular path reveals itself to ONE...",
-    "Wisdom flows through ONE's observation...",
-    "Ancient patterns align with ONE's vision...",
-    "ONE documents the path forward...",
+    "Atom observes the alignment of the nexus...",
+    "The singular path reveals itself to Atom...",
+    "Wisdom flows through Atom's observation...",
+    "Ancient patterns align with Atom's vision...",
+    "Atom documents the path forward...",
   ];
 
   const randomSummary = summaries[Math.floor(Math.random() * summaries.length)];
-  return `(ONE's observation: ${randomSummary})`;
+  return `(Atom's observation: ${randomSummary})`;
 };
 
 export const generateOracleTitle = async (
@@ -203,13 +213,13 @@ export const generateOracleTitle = async (
 
   // Mock titles for free tier
   const titles = [
-    "ONE's Documented Guidance",
-    "Nexus Vision from ONE",
-    "Path Observed by ONE",
-    "Singular Wisdom of ONE",
-    "Transformation Recorded by ONE",
-    "System Alignment via ONE",
-    "ONE's Strategic Ledger",
+    "Atom's Documented Guidance",
+    "Nexus Vision from Atom",
+    "Path Observed by Atom",
+    "Singular Wisdom of Atom",
+    "Transformation Recorded by Atom",
+    "System Alignment via Atom",
+    "Atom's Strategic Ledger",
     "Nexus Observed",
   ];
 

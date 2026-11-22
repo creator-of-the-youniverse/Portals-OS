@@ -18,6 +18,9 @@ import type {
   OwnerRole,
 } from "../types/onboarding";
 import { getAllApps } from "../apps.config";
+import { ensureBigBangStorageEpoch } from "../lib/storageEpoch";
+
+ensureBigBangStorageEpoch();
 
 const useKernelStore = create<KernelState>()(
   persist(

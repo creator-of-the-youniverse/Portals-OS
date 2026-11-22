@@ -370,6 +370,91 @@ async function runTests() {
     console.log("✔ Test 8: Webhook handles charge.refunded extracting Charge object ID without type confusion");
   }
 
+  // Test 9: create-checkout enforces CSRF and canonical trusted return URLs (blocks hostile Origin)
+  {
+    let stripeCalled = false;
+    let capturedParams = null;
+    const mockStripe = {
+      checkout: {
+        sessions: {
+          create: async (params) => {
+            stripeCalled = true;
+            capturedParams = params;
+            return { id: "cs_test_origin", url: "https://checkout.stripe.com/pay/cs_test_origin" };
+          },
+        },
+      },
+    };
+
+    const { req: badReq, res: badRes } = createMockReqRes({
+      method: "POST",
+      url: "/api/stripe/create-checkout",
+      query: { action: "create-checkout" },
+      headers: { host: "itsyouonline.com", origin: "https://evil.example.com" },
+      body: { handle: "cleanhandle", email: "owner@example.com", packId: "starter" },
+    });
+    await handler(badReq, badRes, {
+      stripe: mockStripe,
+      env: { NODE_ENV: "production", VERCEL_ENV: "production" },
+    });
+    assert.strictEqual(badRes.statusCode, 403, "Hostile Origin on create-checkout must be rejected with 403");
+    assert.strictEqual(badRes.bodyData?.error, "csrf_rejected");
+    assert.strictEqual(stripeCalled, false, "Stripe must not be invoked on rejected Origin");
+
+    const { req: okReq, res: okRes } = createMockReqRes({
+      method: "POST",
+      url: "/api/stripe/create-checkout",
+      query: { action: "create-checkout" },
+      headers: { host: "www.itsyouonline.com", origin: "https://www.itsyouonline.com" },
+      body: { handle: "cleanhandle", email: "owner@example.com", packId: "starter" },
+    });
+    await handler(okReq, okRes, {
+      stripe: mockStripe,
+      env: { NODE_ENV: "production", VERCEL_ENV: "production", APP_URL: "https://www.itsyouonline.com" },
+    });
+    assert.strictEqual(okRes.statusCode, 200);
+    assert.strictEqual(stripeCalled, true);
+    assert.ok(String(capturedParams.success_url).startsWith("https://www.itsyouonline.com/api/stripe/success"));
+    assert.ok(String(capturedParams.cancel_url).startsWith("https://www.itsyouonline.com/?claim="));
+    console.log("✔ Test 9: create-checkout rejects hostile Origin and locks return URLs to resolved trusted origin");
+  }
+
+  // Test 10: founding-angels-checkout rejects cookie-only CSRF and cross-tenant Origin
+  {
+    const mockAuthAlice = async () => ({
+      ok: true,
+      user: { userId: "id-alice", youniverseId: "id-alice", handle: "alice", authType: "neon_session" },
+    });
+    const { req: csrfReq, res: csrfRes } = createMockReqRes({
+      method: "POST",
+      url: "/api/stripe/founding-angels-checkout",
+      query: { action: "founding-angels-checkout" },
+      headers: { host: "itsyouonline.com", origin: "https://evil.example.com", cookie: "__youniverse_session=tok" },
+    });
+    await handler(csrfReq, csrfRes, {
+      authenticateRequest: mockAuthAlice,
+      salesEnabled: true,
+      env: { VERCEL_ENV: "production", NODE_ENV: "production" },
+    });
+    assert.strictEqual(csrfRes.statusCode, 403);
+    assert.strictEqual(csrfRes.bodyData?.error, "csrf_rejected");
+
+    const { req: crossTenantReq, res: crossTenantRes } = createMockReqRes({
+      method: "POST",
+      url: "/api/stripe/founding-angels-checkout",
+      query: { action: "founding-angels-checkout" },
+      headers: { host: "bob.itsyouonline.com", origin: "https://bob.itsyouonline.com", cookie: "__youniverse_session=tok" },
+    });
+    await handler(crossTenantReq, crossTenantRes, {
+      authenticateRequest: mockAuthAlice,
+      salesEnabled: true,
+      env: { VERCEL_ENV: "production", NODE_ENV: "production" },
+    });
+    assert.strictEqual(crossTenantRes.statusCode, 403);
+    assert.strictEqual(crossTenantRes.bodyData?.error, "csrf_rejected");
+    console.log("✔ Test 10: founding-angels-checkout rejects hostile and cross-tenant CSRF Origins");
+  }
+
   console.log("\nAll targeted tests passed successfully!");
 }
 

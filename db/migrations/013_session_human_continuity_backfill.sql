@@ -1,0 +1,112 @@
+-- ============================================================================
+-- Migration 013: Session Human Continuity Backfill
+-- Status: PROPOSED DESIGN — NOT EXECUTED — NOT AUTHORIZED
+-- ============================================================================
+-- Purpose:
+--   After Migration 012 introduced `human_id` and `auth_subject_id` columns
+--   on the `sessions` table, sessions created before that migration have
+--   human_id IS NULL. This migration describes the options for handling those
+--   legacy sessions under the Option A (Explicit Authenticated Claim) identity
+--   policy. NO automatic email-equality merging is performed.
+--
+-- Prerequisites:
+--   - Migration 012_human_continuity_credentials.sql MUST have been applied.
+--   - Founder authorization required before execution.
+--   - Run in a transaction; roll back on any error.
+--
+-- Option A Identity Policy Reminder:
+--   Human identity is established ONLY via explicit, authenticated enrollment
+--   (POST /api/auth/enroll). Email equality is NEVER used as a sole basis for
+--   linking a session to a human principal.
+--
+-- Open Decision (Founder Gate Required):
+--   Three options exist for pre-migration sessions (sessions.human_id IS NULL):
+--
+--   OPTION 1 — Invalidate all legacy sessions (most secure):
+--     All sessions without a human_id are immediately revoked. Owners must
+--     re-authenticate via the new password or passkey flow.
+--     Impact: existing owners are logged out on next request.
+--
+--   OPTION 2 — Leave legacy sessions as-is (most compatible):
+--     Legacy sessions continue to function through the existing identity-based
+--     authorization path (`context.ts` else branch). They are not automatically
+--     upgraded. Human continuity features (cross-Youniverse recognition) remain
+--     unavailable until the owner explicitly enrolls.
+--     Impact: no disruption. Owners see new human identity features after
+--     explicit enrollment only.
+--
+--   OPTION 3 — Backfill eligible sessions (hybrid; highest risk):
+--     For sessions where:
+--       (a) the session identity_id maps to a youniverse_identities row,
+--       (b) that youniverse row's email matches exactly one human_auth_subjects
+--           row with provider_type = 'password' and status = 'active', AND
+--       (c) the session is not expired and not revoked,
+--     backfill sessions.human_id from the matching human principal.
+--     Risk: Email equality is used as a joining condition, which approaches the
+--     boundary of Option A. Only safe if each email is guaranteed unique across
+--     both tables. Requires explicit founder sign-off.
+--
+-- ============================================================================
+-- RECOMMENDED DEFAULT: OPTION 2 (no-op — leave legacy sessions as-is)
+-- ============================================================================
+-- The recommended default is Option 2. It requires no DDL changes beyond
+-- Migration 012 and respects Option A exactly. Apply this file only as a
+-- record of the decision. If Option 1 or Option 3 is later authorized,
+-- uncomment the corresponding block below and re-authorize.
+--
+-- ============================================================================
+BEGIN;
+-- ── OPTION 1 DDL (COMMENTED OUT — NOT AUTHORIZED) ───────────────────────────
+-- Revoke all pre-migration sessions that lack a human_id.
+--
+-- UPDATE sessions
+-- SET revoked_at = NOW()
+-- WHERE human_id IS NULL
+--   AND revoked_at IS NULL
+--   AND expires_at > NOW();
+-- ── END OPTION 1 ─────────────────────────────────────────────────────────────
+-- ── OPTION 2 DDL (ACTIVE — no-op per recommendation) ────────────────────────
+-- No action. Legacy sessions remain valid under the existing identity path.
+-- Owners will see human continuity features after explicit /api/auth/enroll.
+SELECT 1 AS migration_013_applied,
+    'option_2_no_op' AS strategy;
+-- ── END OPTION 2 ─────────────────────────────────────────────────────────────
+-- ── OPTION 3 DDL (COMMENTED OUT — NOT AUTHORIZED) ───────────────────────────
+-- Backfill human_id on eligible active sessions via email join.
+-- REQUIRES explicit founder authorization before uncomment.
+--
+-- UPDATE sessions s
+-- SET
+--   human_id        = has.human_id,
+--   auth_subject_id = has.id
+-- FROM youniverse_identities yi
+-- JOIN human_auth_subjects has
+--   ON has.subject_identifier = yi.email
+--  AND has.provider_type = 'password'
+--  AND has.status = 'active'
+-- WHERE s.identity_id::text = yi.identity_id::text
+--   AND s.human_id IS NULL
+--   AND s.revoked_at IS NULL
+--   AND s.expires_at > NOW()
+--   -- Safety: only where email is unique in human_auth_subjects to prevent
+--   -- inadvertent multi-principal collision.
+--   AND (
+--     SELECT COUNT(*) FROM human_auth_subjects has2
+--     WHERE has2.subject_identifier = yi.email
+--       AND has2.provider_type = 'password'
+--       AND has2.status = 'active'
+--   ) = 1;
+-- ── END OPTION 3 ─────────────────────────────────────────────────────────────
+COMMIT;
+-- ============================================================================
+-- Rollback (for Option 1 or Option 3 if previously applied):
+--
+-- BEGIN;
+-- UPDATE sessions
+-- SET human_id = NULL, auth_subject_id = NULL
+-- WHERE human_id IS NOT NULL;
+-- -- For Option 1, to restore revoked sessions (irreversible; use backup restore):
+-- -- There is no safe rollback for session revocation. Restore from pre-migration
+-- -- backup if full rollback is required.
+-- COMMIT;
+-- ============================================================================

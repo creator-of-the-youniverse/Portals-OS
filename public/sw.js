@@ -1,5 +1,5 @@
 // Youniverse Sovereign Service Worker
-const CACHE_NAME = 'youniverse-sovereign-v1';
+const CACHE_NAME = 'youniverse-sovereign-v2';
 const CORE_ASSETS = [
   '/',
   '/index.html',

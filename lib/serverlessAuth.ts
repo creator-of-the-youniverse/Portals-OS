@@ -13,10 +13,16 @@
 
 import { neon } from "@neondatabase/serverless";
 import { hashToken } from "./neonSession.ts";
+import {
+  assertSafeDatabaseTarget,
+  extractSessionCandidatesFromRequest,
+  resolveAuthorizedTargetYouniverse,
+} from "./creatorOwnership.ts";
 import jwt from "jsonwebtoken";
 
 export interface AuthenticatedUser {
   userId: string;
+  humanId?: string | null;
   youniverseId: string;
   handle: string;
   authType: "neon_session" | "jwt";
@@ -26,40 +32,34 @@ export type AuthResult =
   | { ok: true; user: AuthenticatedUser }
   | { ok: false; status: number; error: string; message: string };
 
-export async function authenticateRequest(
+type CandidateAuthAttempt =
+  | { ok: true; user: AuthenticatedUser }
+  | { ok: false; terminal: boolean; status: number; error: string; message: string };
+
+async function authenticateCandidateToken(
+  token: string,
   req: any,
-  deps: { sql?: any; databaseUrl?: string; jwtSecret?: string; prisma?: any } = {}
-): Promise<AuthResult> {
-  const authHeader = req.headers?.["authorization"] || req.headers?.["Authorization"];
-  if (!authHeader || typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
-    return {
-      ok: false,
-      status: 401,
-      error: "unauthorized",
-      message: "Missing or malformed Authorization header.",
-    };
+  deps: {
+    sql?: any;
+    databaseUrl?: string;
+    jwtSecret?: string;
+    prisma?: any;
+    env?: Record<string, string | undefined>;
   }
-
-  const token = authHeader.slice(7).trim();
-  if (!token) {
-    return {
-      ok: false,
-      status: 401,
-      error: "unauthorized",
-      message: "Missing or malformed Authorization header.",
-    };
-  }
-
+): Promise<CandidateAuthAttempt> {
   // ── 1. Neon DB session check (Primary) ──────────────────────────────────
   const databaseUrl = deps.databaseUrl ?? process.env.DATABASE_URL;
+  if (!deps.sql) {
+    assertSafeDatabaseTarget(databaseUrl, deps.env ?? process.env);
+  }
   if (databaseUrl || deps.sql) {
     try {
       const sql = deps.sql ?? neon(databaseUrl!);
       const tokenHash = hashToken(token);
 
       const sessionRows = await sql`
-        SELECT s.id AS session_id, s.identity_id, s.expires_at, s.revoked_at,
-               i.username, i.plan, i.is_live, i.email_verified_at
+        SELECT s.id AS session_id, s.identity_id, s.human_id, s.expires_at, s.revoked_at,
+               i.username, i.email, i.plan, i.is_live, i.email_verified_at
         FROM sessions s
         JOIN youniverse_identities i ON i.identity_id = s.identity_id
         WHERE s.token_hash = ${tokenHash}
@@ -72,6 +72,7 @@ export async function authenticateRequest(
         if (session.revoked_at) {
           return {
             ok: false,
+            terminal: false,
             status: 401,
             error: "session_revoked",
             message: "Session has been revoked.",
@@ -81,6 +82,7 @@ export async function authenticateRequest(
         if (new Date(session.expires_at) < new Date()) {
           return {
             ok: false,
+            terminal: false,
             status: 401,
             error: "session_expired",
             message: "Session has expired.",
@@ -90,6 +92,7 @@ export async function authenticateRequest(
         if (!session.is_live) {
           return {
             ok: false,
+            terminal: true,
             status: 403,
             error: "youniverse_suspended",
             message: "This Youniverse is suspended.",
@@ -99,9 +102,35 @@ export async function authenticateRequest(
         if (!session.email_verified_at) {
           return {
             ok: false,
+            terminal: true,
             status: 403,
             error: "email_not_verified",
             message: "Email verification required before accessing protected features.",
+          };
+        }
+
+        const target = await resolveAuthorizedTargetYouniverse(
+          sql,
+          req,
+          {
+            identity_id: String(session.identity_id),
+            username: String(session.username),
+            human_id: session.human_id ? String(session.human_id) : null,
+            email: session.email ? String(session.email) : null,
+            plan: session.plan ? String(session.plan) : "free",
+            is_live: Boolean(session.is_live),
+            email_verified_at: session.email_verified_at,
+          },
+          { env: deps.env, databaseUrl }
+        );
+
+        if (!target.ok) {
+          return {
+            ok: false,
+            terminal: true,
+            status: target.status,
+            error: target.error,
+            message: target.message,
           };
         }
 
@@ -109,8 +138,9 @@ export async function authenticateRequest(
           ok: true,
           user: {
             userId: String(session.identity_id),
-            youniverseId: String(session.identity_id),
-            handle: String(session.username),
+            humanId: session.human_id ? String(session.human_id) : null,
+            youniverseId: target.youniverseId,
+            handle: target.handle,
             authType: "neon_session",
           },
         };
@@ -129,6 +159,7 @@ export async function authenticateRequest(
     } catch {
       return {
         ok: false,
+        terminal: false,
         status: 401,
         error: "invalid_token",
         message: "Token is invalid or has expired.",
@@ -139,6 +170,7 @@ export async function authenticateRequest(
     if (!userId || !youniverseId || !sessionToken) {
       return {
         ok: false,
+        terminal: false,
         status: 401,
         error: "invalid_token",
         message: "Token payload is incomplete.",
@@ -153,6 +185,7 @@ export async function authenticateRequest(
       if (!session || session.revokedAt || session.expiresAt < new Date() || session.userId !== userId) {
         return {
           ok: false,
+          terminal: false,
           status: 401,
           error: "invalid_token",
           message: "Session is invalid, expired, or revoked.",
@@ -171,6 +204,7 @@ export async function authenticateRequest(
     } catch {
       return {
         ok: false,
+        terminal: true,
         status: 500,
         error: "auth_check_failed",
         message: "Could not verify session.",
@@ -180,8 +214,60 @@ export async function authenticateRequest(
 
   return {
     ok: false,
+    terminal: false,
     status: 401,
     error: "invalid_token",
     message: "Token is invalid or has expired.",
+  };
+}
+
+export async function authenticateRequest(
+  req: any,
+  deps: {
+    sql?: any;
+    databaseUrl?: string;
+    jwtSecret?: string;
+    prisma?: any;
+    env?: Record<string, string | undefined>;
+  } = {}
+): Promise<AuthResult> {
+  const candidates = extractSessionCandidatesFromRequest(req);
+  const candidateTokens = [candidates.bearerToken, candidates.cookieToken].filter(
+    (t, idx, arr): t is string => Boolean(t) && arr.indexOf(t) === idx
+  );
+
+  if (candidateTokens.length === 0) {
+    return {
+      ok: false,
+      status: 401,
+      error: "unauthorized",
+      message: "Missing or malformed Authorization header.",
+    };
+  }
+
+  let firstFailure: CandidateAuthAttempt | null = null;
+  for (const token of candidateTokens) {
+    const attempt = await authenticateCandidateToken(token, req, deps);
+    if (attempt.ok) {
+      return { ok: true, user: attempt.user };
+    }
+    if (attempt.terminal) {
+      return {
+        ok: false,
+        status: attempt.status,
+        error: attempt.error,
+        message: attempt.message,
+      };
+    }
+    if (!firstFailure) {
+      firstFailure = attempt;
+    }
+  }
+
+  return {
+    ok: false,
+    status: firstFailure?.status ?? 401,
+    error: firstFailure?.error ?? "invalid_token",
+    message: firstFailure?.message ?? "Token is invalid or has expired.",
   };
 }

@@ -7,7 +7,13 @@ import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 import { verifyJwt } from "./middleware/verifyJwt.js";
 import { weaverGenerateHandler } from "./controllers/weaverController.js";
-import { saveWeaverArtifactHandler, getWeavedWidgetsHandler } from "./controllers/notNotesController.js";
+import {
+  saveWeaverArtifactHandler,
+  getWeavedWidgetsHandler,
+  updateWeaverArtifactHandler,
+  publishWeaverWidgetHandler,
+  unpublishWeaverWidgetHandler,
+} from "./controllers/notNotesController.js";
 import { getYouniversePublicDataHandler } from "./controllers/youniversePublicController.js";
 import { proxyBrowserHandler } from "./controllers/browserProxyController.js";
 import claimHandler from "./api/claim.ts";
@@ -15,14 +21,30 @@ import youniverseIdentityHandler from "./api/youniverseIdentity.ts";
 import verifyHandler from "./api/v1/auth/verify.ts";
 import verifyTokenHandler from "./api/verify-token.ts";
 import contextHandler from "./api/youniverse/[handle]/context.ts";
+import passwordLoginHandler from "./api/auth/password/login.ts";
+import logoutHandler from "./api/auth/logout.ts";
+import passkeyOptionsHandler from "./api/auth/passkey/options.ts";
+import passkeyVerifyHandler from "./api/auth/passkey/verify.ts";
+import enrollHandler from "./api/auth/enroll.ts";
+import passwordRecoverHandler from "./api/auth/password/recover.ts";
+import passwordResetHandler from "./api/auth/password/reset.ts";
+import passwordSetHandler from "./api/auth/password/set.ts";
+import recoveryCodesHandler from "./api/auth/recovery/codes.ts";
+import recoveryRedeemHandler from "./api/auth/recovery/redeem.ts";
+import manualRecoveryHandler from "./api/auth/recovery/manual.ts";
+import homeverseRelinquishHandler from "./api/auth/homeverse/relinquish.ts";
+import homeverseCancelHandler from "./api/auth/homeverse/cancel.ts";
+import homeverseStatusHandler from "./api/auth/homeverse/status.ts";
+import processRelinquishmentsCronHandler from "./api/cron/process-relinquishments.ts";
+import { isolatedLocalDb } from "./lib/localTestDb.ts";
 
 dotenv.config({ path: ".env.local", override: true });
 dotenv.config(); // fallback to .env for other keys
 
-// Ensure local development exclusively targets the isolated test database
-if (process.env.LOCAL_TEST_DATABASE_URL) {
-  process.env.DATABASE_URL = process.env.LOCAL_TEST_DATABASE_URL;
-}
+// STRICT GOVERNANCE: Local development strictly targets isolated in-memory test database.
+// Primary Neon and Local Test Neon are strictly disconnected to prevent unapproved writes.
+process.env.DATABASE_URL = "postgresql://isolated_local_test:mock@127.0.0.1:5432/portals_isolated_test_db";
+const localSql = isolatedLocalDb.sql;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -380,22 +402,106 @@ app.post("/api/gemini:generate", async (req, res) => {
 
 // POST /api/claim — Neon DB Claim Handler
 app.post("/api/claim", async (req, res) => {
-  return claimHandler(req, res);
+  return claimHandler(req, res, { sql: localSql });
 });
 
 // GET /api/youniverseIdentity — Neon DB Identity Lookup
 app.get("/api/youniverseIdentity", async (req, res) => {
-  return youniverseIdentityHandler(req, res);
+  return youniverseIdentityHandler(req, res, { sql: localSql });
 });
 
 // GET /api/v1/auth/verify — Neon-native hash-backed session & email verification
 app.get("/api/v1/auth/verify", async (req, res) => {
-  return verifyHandler(req, res);
+  return verifyHandler(req, res, { sql: localSql });
 });
 
 // POST /api/verify-token — RS256 handoff verification & Neon session establishment
 app.post("/api/verify-token", async (req, res) => {
-  return verifyTokenHandler(req, res);
+  return verifyTokenHandler(req, res, { sql: localSql });
+});
+
+// ============================================================================
+// HUMAN CONTINUITY AUTHENTICATION ENDPOINTS (LOCAL DEV DELEGATION)
+// ============================================================================
+
+// POST /api/auth/password/login — Human continuity password authentication
+app.post("/api/auth/password/login", async (req, res) => {
+  return passwordLoginHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/login — Alias compatibility
+app.post("/api/auth/login", async (req, res) => {
+  return passwordLoginHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/logout — Session revocation & cookie clearance
+app.post("/api/auth/logout", async (req, res) => {
+  return logoutHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/enroll — Password enrollment
+app.post("/api/auth/enroll", async (req, res) => {
+  return enrollHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/password/recover — Password recovery request
+app.post("/api/auth/password/recover", async (req, res) => {
+  return passwordRecoverHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/passkey/options — WebAuthn options generation
+app.post("/api/auth/passkey/options", async (req, res) => {
+  return passkeyOptionsHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/passkey/verify — WebAuthn verification
+app.post("/api/auth/passkey/verify", async (req, res) => {
+  return passkeyVerifyHandler(req, res, { sql: localSql });
+});
+
+// GET & POST /api/auth/recovery/codes — Offline recovery codes management
+app.all("/api/auth/recovery/codes", async (req, res) => {
+  return recoveryCodesHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/recovery/redeem — Recovery code redemption
+app.post("/api/auth/recovery/redeem", async (req, res) => {
+  return recoveryRedeemHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/password/reset — Single-use password reset token consumption
+app.post("/api/auth/password/reset", async (req, res) => {
+  return passwordResetHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/password/set — Set or update human continuity password
+app.post("/api/auth/password/set", async (req, res) => {
+  return passwordSetHandler(req, res, { sql: localSql });
+});
+
+// GET & POST /api/auth/recovery/manual — Layer 3 controlled manual recovery
+app.all("/api/auth/recovery/manual", async (req, res) => {
+  return manualRecoveryHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/homeverse/relinquish — Initiate 30-day Homeverse cooldown
+app.post("/api/auth/homeverse/relinquish", async (req, res) => {
+  return homeverseRelinquishHandler(req, res, { sql: localSql });
+});
+
+// POST /api/auth/homeverse/cancel — Cancel pending Homeverse relinquishment
+app.post("/api/auth/homeverse/cancel", async (req, res) => {
+  return homeverseCancelHandler(req, res, { sql: localSql });
+});
+
+// GET /api/auth/homeverse/status — Check Homeverse relinquishment cooldown status
+app.get("/api/auth/homeverse/status", async (req, res) => {
+  return homeverseStatusHandler(req, res, { sql: localSql });
+});
+
+// GET & POST /api/cron/process-relinquishments — Scheduled expired relinquishment sweep
+app.all("/api/cron/process-relinquishments", async (req, res) => {
+  return processRelinquishmentsCronHandler(req, res, { sql: localSql });
 });
 
 // ============================================================================
@@ -433,29 +539,73 @@ const weaverRateLimiter = rateLimit({
   },
 });
 
-// Note: verifyJwt runs BEFORE weaverRateLimiter so the keyGenerator
+// Bind localSql explicitly so local dev verification never queries unreachable DATABASE_URL.
+const verifyLocalJwt = (req, res, next) => verifyJwt(req, res, next, { sql: localSql });
+
+// Note: verifyLocalJwt runs BEFORE weaverRateLimiter so the keyGenerator
 // can use req.user.userId for per-user bucketing.
 app.post(
   "/api/weaver/generate",
-  verifyJwt,
+  verifyLocalJwt,
   weaverRateLimiter,
   weaverGenerateHandler
 );
 
 // ============================================================================
-// NOTNOTES — ARTIFACT PERSISTENCE
-// POST /api/not-notes/artifact
+// NOTNOTES — ARTIFACT PERSISTENCE & PUBLISHING LIFECYCLE
+// POST / PUT / PATCH /api/not-notes/artifact, update, publish, unpublish, widgets
 // ============================================================================
 app.post(
   "/api/not-notes/artifact",
-  verifyJwt,
-  saveWeaverArtifactHandler
+  verifyLocalJwt,
+  (req, res) => {
+    const action = req.body?.action;
+    if (action === "update") return updateWeaverArtifactHandler(req, res, { sql: localSql });
+    if (action === "publish") return publishWeaverWidgetHandler(req, res, { sql: localSql });
+    if (action === "unpublish") return unpublishWeaverWidgetHandler(req, res, { sql: localSql });
+    return saveWeaverArtifactHandler(req, res, { sql: localSql });
+  }
+);
+
+app.put(
+  "/api/not-notes/artifact",
+  verifyLocalJwt,
+  (req, res) => updateWeaverArtifactHandler(req, res, { sql: localSql })
+);
+
+app.patch(
+  "/api/not-notes/artifact",
+  verifyLocalJwt,
+  (req, res) => {
+    const action = req.body?.action;
+    if (action === "publish") return publishWeaverWidgetHandler(req, res, { sql: localSql });
+    if (action === "unpublish") return unpublishWeaverWidgetHandler(req, res, { sql: localSql });
+    return updateWeaverArtifactHandler(req, res, { sql: localSql });
+  }
+);
+
+app.post(
+  "/api/not-notes/update",
+  verifyLocalJwt,
+  (req, res) => updateWeaverArtifactHandler(req, res, { sql: localSql })
+);
+
+app.post(
+  "/api/not-notes/publish",
+  verifyLocalJwt,
+  (req, res) => publishWeaverWidgetHandler(req, res, { sql: localSql })
+);
+
+app.post(
+  "/api/not-notes/unpublish",
+  verifyLocalJwt,
+  (req, res) => unpublishWeaverWidgetHandler(req, res, { sql: localSql })
 );
 
 app.get(
   "/api/not-notes/widgets",
-  verifyJwt,
-  getWeavedWidgetsHandler
+  verifyLocalJwt,
+  (req, res) => getWeavedWidgetsHandler(req, res, { sql: localSql })
 );
 
 // ============================================================================
@@ -464,7 +614,7 @@ app.get(
 // Uses Neon-native hash-backed session & identity verification
 // ============================================================================
 app.get("/api/youniverse/:handle/context", async (req, res) => {
-  return contextHandler(req, res);
+  return contextHandler(req, res, { sql: localSql });
 });
 
 // ============================================================================
@@ -473,7 +623,9 @@ app.get("/api/youniverse/:handle/context", async (req, res) => {
 // ============================================================================
 app.get(
   "/api/youniverse/:handle/public",
-  getYouniversePublicDataHandler
+  async (req, res) => {
+    return getYouniversePublicDataHandler(req, res, { sql: localSql });
+  }
 );
 
 // ============================================================================

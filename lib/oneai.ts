@@ -1,20 +1,34 @@
+let oneAiServiceUnavailable = false;
+
+export function resetOneAiAvailabilityForTests(): void {
+  oneAiServiceUnavailable = false;
+}
+
 export async function generateOneAiHint(contextText: string): Promise<string> {
+  const fallback =
+    contextText.length > 50 ? contextText.slice(0, 50) + "..." : contextText;
+
+  if (oneAiServiceUnavailable) {
+    return fallback;
+  }
+
   try {
     let token: string | null = null;
     if (typeof window !== 'undefined') {
       token = localStorage.getItem('youniverse_session_token') || localStorage.getItem('weaver_jwt');
     }
 
-    if (!token) {
-      return contextText.length > 50 ? contextText.slice(0, 50) + "..." : contextText;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
 
     const response = await fetch('/api/gemini', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
+      credentials: 'same-origin',
+      headers,
       body: JSON.stringify({
         model: 'gemini-1.5-flash',
         systemInstruction: {
@@ -38,18 +52,19 @@ export async function generateOneAiHint(contextText: string): Promise<string> {
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.statusText}`);
+      if (response.status >= 400) {
+        oneAiServiceUnavailable = true;
+      }
+      return fallback;
     }
 
     const data = await response.json();
     if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
       return data.candidates[0].content.parts[0].text.trim();
     }
-    
-    return contextText.length > 50 ? contextText.slice(0, 50) + "..." : contextText;
-  } catch (error) {
-    console.error("ONEAI Hint generation failed:", error);
-    // Fallback to the original text if API fails
-    return contextText.length > 50 ? contextText.slice(0, 50) + "..." : contextText;
+
+    return fallback;
+  } catch {
+    return fallback;
   }
 }

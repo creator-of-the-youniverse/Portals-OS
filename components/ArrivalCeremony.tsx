@@ -53,6 +53,7 @@ export const ArrivalCeremony: React.FC<ArrivalCeremonyProps> = ({
       const verifyUrl = `/api/verify-token${window.location.search}`;
       fetch(verifyUrl, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
       })
@@ -64,15 +65,9 @@ export const ArrivalCeremony: React.FC<ArrivalCeremonyProps> = ({
             data = null;
           }
 
-          if (
-            res.ok &&
-            data &&
-            data.success &&
-            data.workspaceConfig &&
-            typeof data.sessionToken === "string" &&
-            data.sessionToken.trim().length > 0
-          ) {
-            const validSessionToken = data.sessionToken.trim();
+          if (res.ok && data && data.success && data.workspaceConfig) {
+            const validSessionToken =
+              typeof data.sessionToken === "string" ? data.sessionToken.trim() : "";
             setResolvedConfig(data.workspaceConfig);
             onConfigResolved?.(data.workspaceConfig);
             setArrival({
@@ -83,8 +78,10 @@ export const ArrivalCeremony: React.FC<ArrivalCeremonyProps> = ({
             });
             localStorage.setItem(STORAGE.foundation(handle), JSON.stringify(data.workspaceConfig));
             localStorage.setItem(STORAGE.arrived(handle), "true");
-            localStorage.setItem("youniverse_session_token", validSessionToken);
-            localStorage.setItem("weaver_jwt", validSessionToken);
+            if (validSessionToken.length > 0) {
+              localStorage.setItem("youniverse_session_token", validSessionToken);
+              localStorage.setItem("weaver_jwt", validSessionToken);
+            }
             localStorage.setItem("active_youniverse_handle", handle);
             onVerified?.(validSessionToken, data.workspaceConfig, data.entitlements);
           } else {

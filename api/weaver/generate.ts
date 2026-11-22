@@ -6,6 +6,7 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { authenticateRequest } from "../../lib/serverlessAuth.ts";
+import { enforceAntiCsrf, extractTenantOriginHandle } from "../../lib/creatorOwnership.ts";
 import { WEAVER_RESPONSE_SCHEMA, WEAVER_SYSTEM_INSTRUCTION } from "../../lib/weaverSystemPrompt.js";
 
 const WEAVER_MODEL = "gemini-2.0-flash-001";
@@ -17,9 +18,43 @@ export default async function handler(req: any, res: any, deps: any = {}) {
     return res.status(405).json({ success: false, error: "method_not_allowed" });
   }
 
+  const hasOriginHeader = Boolean(req?.headers?.origin ?? req?.headers?.Origin);
+  const rawAuthHeader = req?.headers?.authorization ?? req?.headers?.Authorization;
+  const hasBearerAuth =
+    typeof rawAuthHeader === "string" &&
+    rawAuthHeader.startsWith("Bearer ") &&
+    rawAuthHeader.slice(7).trim().length > 0;
+
+  if (hasOriginHeader || !hasBearerAuth) {
+    const normalizedHeaders =
+      !req?.headers?.origin && req?.headers?.Origin
+        ? { ...req.headers, origin: req.headers.Origin }
+        : req?.headers;
+    const csrfReq = normalizedHeaders === req?.headers ? req : { ...req, headers: normalizedHeaders };
+    const csrf = enforceAntiCsrf(csrfReq, deps?.env ?? process.env, {
+      allowSameOriginTenantSubdomain: true,
+    });
+    if (csrf.blocked) {
+      return res.status(403).json({
+        success: false,
+        error: "csrf_rejected",
+        message: csrf.reason,
+      });
+    }
+  }
+
   const auth = await authenticateRequest(req, deps);
   if (!auth.ok) {
     return res.status(auth.status).json({ success: false, error: auth.error, message: auth.message });
+  }
+
+  const originTenantHandle = extractTenantOriginHandle(req);
+  if (originTenantHandle && originTenantHandle !== auth.user.handle.toLowerCase()) {
+    return res.status(403).json({
+      success: false,
+      error: "csrf_rejected",
+      message: "Origin tenant handle does not match authorized target Youniverse.",
+    });
   }
 
   const { prompt } = req.body ?? {};

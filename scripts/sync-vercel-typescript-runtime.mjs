@@ -29,16 +29,22 @@ const REPO_ROOT = process.cwd();
 const OUTPUT_DIR = path.join(REPO_ROOT, ".vercel", "output");
 const FUNCTIONS_DIR = path.join(OUTPUT_DIR, "functions");
 
-// Critical handlers that require TypeScript runtime packaging
+const MAX_VERCEL_HOBBY_FUNCTIONS = 12;
+
+// Critical handlers that require TypeScript runtime packaging (12 consolidated functions <= Hobby cap)
 const REQUIRED_HANDLERS = [
+  "api/auth/[route].func",
   "api/claim.func",
+  "api/cron/process-relinquishments.func",
+  "api/gemini.func",
   "api/genesis/[action].func",
+  "api/not-notes/[action].func",
   "api/stripe/[action].func",
   "api/v1/auth/verify.func",
   "api/verify-token.func",
+  "api/weaver/generate.func",
+  "api/youniverse/[handle]/[action].func",
   "api/youniverseIdentity.func",
-  "api/youniverse/[handle]/context.func",
-  "api/youniverse/[handle]/public.func",
 ];
 
 // Regex to detect relative imports ending in .ts
@@ -96,6 +102,14 @@ async function main() {
 
   // 2. Scan all .func directories in .vercel/output/functions
   const allFuncDirs = findFuncDirectories(FUNCTIONS_DIR);
+  console.log(`[sync-vercel-ts-runtime] Discovered ${allFuncDirs.length} function bundle(s).`);
+  if (allFuncDirs.length > MAX_VERCEL_HOBBY_FUNCTIONS) {
+    fail(
+      `Function count ${allFuncDirs.length} exceeds Vercel Hobby limit of ${MAX_VERCEL_HOBBY_FUNCTIONS}: [${allFuncDirs
+        .map((d) => path.relative(FUNCTIONS_DIR, d).replace(/\\/g, "/"))
+        .join(", ")}]`
+    );
+  }
   let totalCopied = 0;
   const syncSummary = [];
 
@@ -194,14 +208,37 @@ async function main() {
     }
   }
 
-  // 3. Validation pass: verify all 5 critical entrypoints resolve cleanly
+  // 3. Validation pass: verify all required and discovered compiled entrypoints resolve cleanly
   console.log("[sync-vercel-ts-runtime] Validating bundled module resolution...");
+  const validatedHandlers = new Set();
   for (const relFunc of REQUIRED_HANDLERS) {
     const funcDir = path.join(FUNCTIONS_DIR, relFunc);
     const vcConfig = JSON.parse(fs.readFileSync(path.join(funcDir, ".vc-config.json"), "utf8"));
     const bundleEntry = path.join(funcDir, vcConfig.handler);
+    validatedHandlers.add(bundleEntry);
 
     // Dynamic import test in Node 24 runtime
+    try {
+      const fileUrl = pathToFileURL(bundleEntry).href;
+      const mod = await import(fileUrl);
+      if (typeof mod.default !== "function") {
+        fail(`Bundle ${relFunc} default export is not a function (got ${typeof mod.default})`);
+      }
+    } catch (err) {
+      fail(`Runtime import verification failed for ${relFunc}: ${err.message}`);
+    }
+  }
+
+  for (const funcDir of allFuncDirs) {
+    const vcConfigPath = path.join(funcDir, ".vc-config.json");
+    if (!fs.existsSync(vcConfigPath)) continue;
+    const vcConfig = JSON.parse(fs.readFileSync(vcConfigPath, "utf8"));
+    if (!vcConfig.handler || !vcConfig.handler.endsWith(".js")) continue;
+    const bundleEntry = path.join(funcDir, vcConfig.handler);
+    if (!fs.existsSync(bundleEntry) || validatedHandlers.has(bundleEntry)) continue;
+    validatedHandlers.add(bundleEntry);
+
+    const relFunc = path.relative(FUNCTIONS_DIR, funcDir).replace(/\\/g, "/");
     try {
       const fileUrl = pathToFileURL(bundleEntry).href;
       const mod = await import(fileUrl);

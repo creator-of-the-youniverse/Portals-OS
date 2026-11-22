@@ -15,6 +15,7 @@
 
 import Stripe from "stripe";
 import { Pool, neonConfig } from "@neondatabase/serverless";
+import { assertSafeDatabaseTarget } from "./creatorOwnership.ts";
 import { validateE2EDatabaseTarget } from "./e2eDatabaseConfig.ts";
 
 // Ensure native Node.js / edge WebSocket constructor is wired for Pool connection
@@ -48,6 +49,8 @@ export function getPool(deps: ServiceDependencies = {}): Pool {
   if (!connectionString) {
     throw new Error("DATABASE_URL is not configured.");
   }
+
+  assertSafeDatabaseTarget(connectionString, deps.env ?? process.env);
 
   if (isE2E) {
     // Fail immediately if connection string points to remote Neon or non-e2e target

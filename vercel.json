@@ -5,6 +5,10 @@
             "destination": "/api/gemini"
         },
         {
+            "source": "/api/auth/:group/:leaf",
+            "destination": "/api/auth/:group--:leaf"
+        },
+        {
             "source": "/((?!api/).*)",
             "destination": "/index.html"
         }
@@ -22,6 +26,12 @@
             "headers": [
                 { "key": "Content-Type", "value": "application/manifest+json" }
             ]
+        }
+    ],
+    "crons": [
+        {
+            "path": "/api/cron/process-relinquishments",
+            "schedule": "0 3 * * *"
         }
     ]
 }

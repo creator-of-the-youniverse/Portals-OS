@@ -1,10 +1,13 @@
 import { neon } from "@neondatabase/serverless";
+import { assertSafeDatabaseTarget } from "./creatorOwnership.ts";
 import type { YouniverseIdentityRepository } from "./youniverseIdentityRepository";
 import type { YouniverseIdentityRecord } from "./youniverseIdentityTypes";
 
 export function createNeonYouniverseIdentityRepository(
-  databaseUrl: string
+  databaseUrl: string,
+  env: Record<string, string | undefined> = process.env
 ): YouniverseIdentityRepository {
+  assertSafeDatabaseTarget(databaseUrl, env);
   const sql = neon(databaseUrl);
 
   return {

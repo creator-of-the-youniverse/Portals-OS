@@ -484,7 +484,9 @@ test("2. Subsequent claimants complete normally without receiving Genesis 001", 
   await verifyHandler(r2.req, r2.res, { sql: db.sqlTag, pool: db.pool, isProduction: true });
   assert.strictEqual(r2.res.statusCode, 200);
   assert.strictEqual(r2.res.body.success, true);
-  assert.ok(r2.res.body.sessionToken, "Second claimant must still receive valid session");
+  assert.strictEqual(r2.res.body.sessionToken, undefined, "Raw sessionToken must not be exposed in JSON body");
+  assert.match(String(r2.res.headers["Set-Cookie"] ?? ""), /__youniverse_session=[^;]+.*HttpOnly/i, "Second claimant must receive HttpOnly session cookie");
+  assert.ok(r2.res.body.handoffToken);
   assert.strictEqual(db.state.awards.size, 1);
   assert.strictEqual(db.state.awards.get(GENESIS_AWARD_SLOT).identity_id, "id_1");
 });
@@ -513,7 +515,9 @@ test("3. Concurrent eligible claims produce exactly one winner and allow losers 
   for (const r of results) {
     assert.strictEqual(r.statusCode, 200);
     assert.strictEqual(r.body.success, true);
-    assert.ok(r.body.sessionToken);
+    assert.strictEqual(r.body.sessionToken, undefined);
+    assert.match(String(r.headers["Set-Cookie"] ?? ""), /__youniverse_session=[^;]+.*HttpOnly/i);
+    assert.ok(r.body.handoffToken);
   }
   assert.strictEqual(db.state.awards.size, 1, "Exactly one concurrent verification may win Genesis 001");
   assert.strictEqual(db.state.entitlements.length, 1);

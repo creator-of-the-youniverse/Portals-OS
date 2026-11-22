@@ -206,9 +206,18 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
     try {
       // ── FREE TIER: hit /api/claim directly ─────────────────────
       if (selectedPackData?.isFree || selectedPack === "free") {
-        const res = await fetch("/api/claim", {
+        const sessionToken =
+          typeof localStorage !== "undefined"
+            ? localStorage.getItem("youniverse_session_token") ||
+              localStorage.getItem("weaver_jwt")
+            : null;
+        let res = await fetch("/api/claim", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+          },
           body: JSON.stringify({
             handle: cleanHandle,
             email: email.trim(),
@@ -216,9 +225,32 @@ const ClaimYouniverse: React.FC<ClaimYouniverseProps> = ({ prefilledHandle }) =>
           }),
         });
 
+        if (res.status === 401 && sessionToken) {
+          if (typeof localStorage !== "undefined") {
+            localStorage.removeItem("youniverse_session_token");
+            localStorage.removeItem("weaver_jwt");
+          }
+          res = await fetch("/api/claim", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              handle: cleanHandle,
+              email: email.trim(),
+              displayName: cleanHandle,
+            }),
+          });
+        }
+
         const data = await res.json();
 
-        if (res.ok && (data.status === "created" || data.status === "pending_verification" || data.success === true)) {
+        if (res.ok && data.destinationUrl) {
+          localStorage.setItem("active_youniverse_handle", cleanHandle);
+          window.location.href = data.destinationUrl;
+          return;
+        }
+
+        if (res.ok && (data.status === "created" || data.status === "pending_verification" || data.status === "verified_creator_claim" || data.success === true)) {
           localStorage.setItem("active_youniverse_handle", cleanHandle);
           setEmailSent(data.emailSent === true);
           setStep("atom");

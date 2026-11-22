@@ -44,6 +44,12 @@ export interface WeavedWidget {
   title: string;
   code: string;
   dependencies: string[];
+  publicationStatus?: "draft" | "published" | "unpublished";
+  isPublished?: boolean;
+  publishedAt?: string | null;
+  unpublishedAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface ServerEntitlementsSnapshot {

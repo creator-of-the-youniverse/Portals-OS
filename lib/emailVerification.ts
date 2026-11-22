@@ -13,6 +13,7 @@
 
 import { Pool, neonConfig, type NeonQueryFunction } from "@neondatabase/serverless";
 import { randomBytes } from "crypto";
+import { assertSafeDatabaseTarget } from "./creatorOwnership.ts";
 import { hashToken } from "./neonSession.ts";
 import {
   tryAwardGenesis001InTransaction,
@@ -45,6 +46,7 @@ export type VerificationConsumeResult =
 export interface ConsumeWithGenesisOptions {
   pool?: { connect(): Promise<QueryRunner & { release(): void }> };
   databaseUrl?: string;
+  env?: Record<string, string | undefined>;
   rawToken: string;
   isProduction: boolean;
   beforeCommitHook?: (client: QueryRunner) => Promise<void>;
@@ -199,7 +201,11 @@ export async function consumeVerificationToken(
 let cachedPool: Pool | null = null;
 let cachedPoolUrl: string | null = null;
 
-function getVerificationPool(databaseUrl: string): Pool {
+function getVerificationPool(
+  databaseUrl: string,
+  env: Record<string, string | undefined> = process.env
+): Pool {
+  assertSafeDatabaseTarget(databaseUrl, env);
   if (!cachedPool || cachedPoolUrl !== databaseUrl) {
     cachedPool = new Pool({ connectionString: databaseUrl });
     cachedPoolUrl = databaseUrl;
@@ -222,7 +228,7 @@ export async function consumeVerificationTokenWithGenesis(
 
   const pool =
     opts.pool ??
-    (opts.databaseUrl ? getVerificationPool(opts.databaseUrl) : null);
+    (opts.databaseUrl ? getVerificationPool(opts.databaseUrl, opts.env ?? process.env) : null);
 
   if (!pool) {
     throw new Error("Pool or databaseUrl is required for transactional verification.");

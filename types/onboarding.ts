@@ -153,6 +153,9 @@ export interface ClaimResponse {
   success: boolean;
   subdomain: string;
   sessionToken?: string;
+  handoffToken?: string;
+  destinationUrl?: string;
+  status?: string;
   error?: string;
 }
 

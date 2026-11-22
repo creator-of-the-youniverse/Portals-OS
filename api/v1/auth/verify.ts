@@ -38,6 +38,11 @@ import {
   isProductionRuntime,
 } from "../../../lib/cryptoHandoff.ts";
 import { YOUNIVERSE_ROOT_DOMAIN } from "../../../lib/youniverseRouting.ts";
+import {
+  assertSafeDatabaseTarget,
+  buildSessionCookieHeader,
+  syncVerifiedOwnerMembership,
+} from "../../../lib/creatorOwnership.ts";
 
 function firstHeaderValue(value: unknown): string {
   if (Array.isArray(value)) return typeof value[0] === "string" ? value[0] : "";
@@ -99,6 +104,7 @@ export interface VerifyHandlerDeps {
   createSession?: typeof defaultCreateSession;
   signHandoffToken?: typeof defaultSignHandoffToken;
   isProduction?: boolean;
+  env?: Record<string, string | undefined>;
 }
 
 export default async function handler(req: any, res: any, deps: VerifyHandlerDeps = {}) {
@@ -115,6 +121,9 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
   const databaseUrl = deps.databaseUrl ?? process.env.DATABASE_URL;
   if (!databaseUrl && !deps.sql) {
     return res.status(500).json({ success: false, error: "server_misconfiguration", message: "Database not configured." });
+  }
+  if (!deps.sql) {
+    assertSafeDatabaseTarget(databaseUrl, deps?.env ?? process.env);
   }
 
   const sql = deps.sql ?? neon(databaseUrl!);
@@ -134,6 +143,7 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
       ? await (deps.consumeVerificationTokenWithGenesis ?? defaultConsumeVerificationTokenWithGenesis)({
           pool: deps.pool,
           databaseUrl: deps.pool ? undefined : databaseUrl,
+          env: deps.env,
           rawToken: token.trim(),
           isProduction: deps.isProduction === false ? false : isProductionGenesisRuntime(),
         })
@@ -164,13 +174,42 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
     });
   }
 
-  // ── 2. Create authenticated owner session (gateway / direct contract) ──
+  // ── 2. Sync verified owner account & create authenticated owner session ──
+  await syncVerifiedOwnerMembership(sql, {
+    identityId: consumeResult.identityId,
+    email: consumeResult.email,
+  });
+
+  let linkedHumanId: string | undefined;
+  try {
+    const assocRows = await sql`
+      SELECT human_id
+      FROM human_youniverse_associations
+      WHERE identity_id = ${String(consumeResult.identityId)}
+        AND role = 'owner'
+        AND verification_status = 'verified'
+        AND revoked_at IS NULL
+      ORDER BY is_homeverse DESC, created_at ASC
+      LIMIT 1
+    `;
+    if (Array.isArray(assocRows) && assocRows.length > 0 && assocRows[0]?.human_id) {
+      linkedHumanId = String(assocRows[0].human_id);
+    }
+  } catch {
+    // Non-fatal if table unavailable in unmigrated/mock environment
+  }
+
   const { rawToken } = await createSessionFn(sql, consumeResult.identityId, {
+    ...(linkedHumanId ? { humanId: linkedHumanId } : {}),
     ttlSeconds: 60 * 60 * 24 * 7, // 7 days
     userAgent: req.headers?.["user-agent"] ?? null,
     ipAddress: (req.headers?.["x-forwarded-for"] as string | undefined)
       ?.split(",")[0]?.trim() ?? null,
   });
+
+  if (typeof res.setHeader === "function") {
+    res.setHeader("Set-Cookie", buildSessionCookieHeader(rawToken, req, 60 * 60 * 24 * 7));
+  }
 
   // ── 3. Issue single-use RS256 handoff ticket for destination workspace ──
   const nonce = randomBytes(24).toString("hex");
@@ -228,13 +267,13 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
     return res.status(303).end();
   }
 
-  // ── 5. API caller: existing JSON contract ───────────────────────────────
+  // ── 5. API caller: existing JSON contract (raw session token NOT exposed) ──
   return res.status(200).json({
     success: true,
     handle: consumeResult.username,
     subdomain: `${consumeResult.username}.${YOUNIVERSE_ROOT_DOMAIN}`,
     role: "AUTHENTICATED_OWNER",
-    sessionToken: rawToken,
+    // sessionToken is intentionally omitted: delivered exclusively via HttpOnly cookie.
     handoffToken,
     destinationUrl,
   });

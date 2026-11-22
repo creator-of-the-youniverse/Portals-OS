@@ -39,12 +39,8 @@ import {
   FoundingAngelsSuccess,
   FoundingAngelsCancel,
 } from "./components/founding-angels";
-import {
-  GenesisBadge,
-  GenesisCeremonyModal,
-  GenesisRegistryModal,
-  GenesisRegistryPage,
-} from "./components/genesis";
+import { ensureBigBangStorageEpoch } from "./lib/storageEpoch";
+import { GenesisBadge, GenesisCeremonyModal, GenesisRegistryModal, GenesisRegistryPage } from "./components/genesis";
 
 const App: React.FC = () => {
   const windows = useKernel((state) => state.windows);
@@ -66,12 +62,39 @@ const App: React.FC = () => {
   // Determined by a server-verified ownership check — NOT a client-side flag.
   const [subdomainOsActive, setSubdomainOsActive] = useState<boolean>(false);
   const [ownerGateChecked, setOwnerGateChecked] = useState<boolean>(false);
+  const [ownedYouniverses, setOwnedYouniverses] = useState<
+    Array<{
+      identityId: string;
+      handle: string;
+      subdomain: string;
+      displayName: string;
+      plan: string;
+      claimSource: string;
+    }>
+  >([]);
+  const [isSwitchingYouniverse, setIsSwitchingYouniverse] = useState<boolean>(false);
+  const [ownerHasPassword, setOwnerHasPassword] = useState<boolean | null>(null);
+  const [ownerLoginInitialMode, setOwnerLoginInitialMode] = useState<'password' | 'passkey' | 'recover' | 'enroll' | undefined>(undefined);
+  const [resetNewPassword, setResetNewPassword] = useState<string>('');
+  const [resetSubmitting, setResetSubmitting] = useState<boolean>(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
+  const [resetTokenFromUrl, setResetTokenFromUrl] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    const p = window.location.pathname.toLowerCase().replace(/\/+$/, "") || "/";
+    if (p !== "/reset-password") return "";
+    return (new URLSearchParams(window.location.search).get("token") || "").trim();
+  });
   const [showArrivalCeremony, setShowArrivalCeremony] = useState<boolean>(true);
   const [handoffPending, setHandoffPending] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return /(?:^|#|&)handoff_token=/.test(window.location.hash);
   });
   const handoffReconciledRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    ensureBigBangStorageEpoch();
+  }, []);
 
   // Client-side route tracking for direct path navigation
   const [currentPath, setCurrentPath] = useState<string>(() => {
@@ -132,28 +155,29 @@ const App: React.FC = () => {
     }
 
     // ── Server-verified owner gate ──────────────────────────────────────────
-    // Attempt to verify ownership via JWT. If the user is not the owner (or has
-    // no token at all), fall through to the Public Youniverse view.
+    // Attempt to verify ownership via Bearer token or HttpOnly session cookie.
+    // If the user is not the owner, fall through to the Public Youniverse view.
     const verifyOwnership = async () => {
       const token =
         localStorage.getItem("youniverse_session_token") ||
         localStorage.getItem("weaver_jwt");
 
-      if (!token) {
-        // No session present — definitely not the owner in this browser.
-        setSubdomainOsActive(false);
-        setOwnerGateChecked(true);
-        return;
-      }
-
       try {
-        const res = await fetch(`/api/youniverse/${handle}/context`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const res = await fetch(`/api/youniverse/${encodeURIComponent(handle)}/context`, {
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
 
         if (!res.ok) {
           // 401 / 403 / 404 — not owner or token is stale.
+          if (res.status === 401) {
+            localStorage.removeItem("youniverse_session_token");
+            localStorage.removeItem("weaver_jwt");
+            localStorage.removeItem(`youniverse_os_active_${handle}`);
+          }
           setSubdomainOsActive(false);
+          setOwnedYouniverses([]);
+          setOwnerHasPassword(null);
           setOwnerGateChecked(true);
           return;
         }
@@ -162,12 +186,18 @@ const App: React.FC = () => {
 
         if (data.success && data.isOwner === true) {
           setSubdomainOsActive(true);
+          setOwnerHasPassword(typeof data.hasPassword === "boolean" ? data.hasPassword : null);
           hydrateServerEntitlements(data.entitlements ?? null);
+          setOwnedYouniverses(
+            Array.isArray(data.ownedYouniverses) ? data.ownedYouniverses : []
+          );
           // Cache confirmation so the gate only hits the server once per session.
           localStorage.setItem(`youniverse_os_active_${handle}`, "true");
         } else {
           // Valid token but different owner — show public view.
           setSubdomainOsActive(false);
+          setOwnedYouniverses([]);
+          setOwnerHasPassword(null);
           hydrateServerEntitlements(null);
           localStorage.removeItem(`youniverse_os_active_${handle}`);
         }
@@ -175,6 +205,8 @@ const App: React.FC = () => {
         // Network failure — fail safe: show public view.
         console.warn("[OwnerGate] Network error, defaulting to public view.");
         setSubdomainOsActive(false);
+        setOwnedYouniverses([]);
+        setOwnerHasPassword(null);
       } finally {
         setOwnerGateChecked(true);
       }
@@ -185,16 +217,21 @@ const App: React.FC = () => {
 
   // Load custom sovereign widgets from NotNotes when OS boots
   useEffect(() => {
-    if (subdomainOsActive) {
+    const activeHandle = identity?.username;
+    if (subdomainOsActive && activeHandle) {
+      useKernel.getState().setWeavedWidgets([]);
       const fetchWidgets = async () => {
         try {
           const token = localStorage.getItem("youniverse_session_token") || localStorage.getItem("weaver_jwt");
-          if (!token) return;
-
+          const widgetHeaders: Record<string, string> = {
+            "X-Youniverse-Handle": activeHandle,
+          };
+          if (token) {
+            widgetHeaders.Authorization = `Bearer ${token}`;
+          }
           const response = await fetch("/api/not-notes/widgets", {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
+            credentials: "same-origin",
+            headers: widgetHeaders,
           });
           const data = await response.json();
           if (data.success && data.widgets) {
@@ -206,32 +243,114 @@ const App: React.FC = () => {
       };
       fetchWidgets();
     }
-  }, [subdomainOsActive]);
+  }, [subdomainOsActive, identity?.username]);
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
-  const enterSubdomainOs = useCallback(() => {
+  const enterSubdomainOs = useCallback(async () => {
+    const activeHandle = identity?.username;
+    if (!activeHandle) {
+      setOwnerLoginInitialMode(undefined);
+      setIsLoginModalOpen(true);
+      return;
+    }
+
+    const token =
+      localStorage.getItem("youniverse_session_token") ||
+      localStorage.getItem("weaver_jwt");
+
+    try {
+      const res = await fetch(`/api/youniverse/${encodeURIComponent(activeHandle)}/context`, {
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = res.ok ? await res.json().catch(() => null) : null;
+      if (res.ok && data?.success && data.isOwner === true) {
+        setIsLoginModalOpen(false);
+        setSubdomainOsActive(true);
+        setOwnerGateChecked(true);
+        setOwnerHasPassword(typeof data.hasPassword === "boolean" ? data.hasPassword : null);
+        hydrateServerEntitlements(data.entitlements ?? null);
+        setOwnedYouniverses(
+          Array.isArray(data.ownedYouniverses) ? data.ownedYouniverses : []
+        );
+        return;
+      }
+    } catch {
+      // Fail closed to login prompt on network error
+    }
+
+    setSubdomainOsActive(false);
+    setOwnedYouniverses([]);
+    setOwnerHasPassword(null);
+    hydrateServerEntitlements(null);
+    setOwnerLoginInitialMode(undefined);
     setIsLoginModalOpen(true);
-  }, []);
+  }, [hydrateServerEntitlements, identity?.username]);
 
   const handleLoginSuccess = useCallback(
-    (token: string) => {
-      setIsLoginModalOpen(false);
-      setSubdomainOsActive(true);
-      if (token) {
-        fetch("/api/genesis/status", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            if (data?.success && data.entitlements) {
-              hydrateServerEntitlements(data.entitlements);
-            }
-          })
-          .catch(() => {});
+    async (token: string) => {
+      if (!identity?.username) {
+        setIsLoginModalOpen(false);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/youniverse/${encodeURIComponent(identity.username)}/context`, {
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const data = res.ok ? await res.json().catch(() => null) : null;
+        if (res.ok && data?.success && data.isOwner === true) {
+          setIsLoginModalOpen(false);
+          setSubdomainOsActive(true);
+          setOwnerGateChecked(true);
+          setOwnerHasPassword(typeof data.hasPassword === "boolean" ? data.hasPassword : null);
+          if (data.entitlements) {
+            hydrateServerEntitlements(data.entitlements);
+          }
+          if (Array.isArray(data.ownedYouniverses)) {
+            setOwnedYouniverses(data.ownedYouniverses);
+          }
+          return;
+        }
+      } catch {
+        // Fail closed on network error
+      }
+      setSubdomainOsActive(false);
+      setOwnedYouniverses([]);
+      setOwnerHasPassword(null);
+    },
+    [hydrateServerEntitlements, identity?.username]
+  );
+
+  const handleSwitchYouniverse = useCallback(
+    async (targetHandle: string) => {
+      if (!targetHandle || targetHandle === identity?.username || isSwitchingYouniverse) {
+        return;
+      }
+      setIsSwitchingYouniverse(true);
+      try {
+        const token =
+          localStorage.getItem("youniverse_session_token") ||
+          localStorage.getItem("weaver_jwt");
+        const res = await fetch(
+          `/api/youniverse/${encodeURIComponent(targetHandle)}/context?handoff=1`,
+          {
+            credentials: "include",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          }
+        );
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.success && data.isOwner && data.destinationUrl) {
+          window.location.href = data.destinationUrl;
+        }
+      } catch (err) {
+        console.warn("[OwnerGate] Failed to switch Youniverse:", err);
+      } finally {
+        setIsSwitchingYouniverse(false);
       }
     },
-    [hydrateServerEntitlements]
+    [identity?.username, isSwitchingYouniverse]
   );
 
   const viewPublicShowcase = useCallback(() => {
@@ -277,7 +396,7 @@ const App: React.FC = () => {
     };
   }, [theme]);
 
-   const addDeliverable = useKernel((state) => state.addDeliverable);
+  const addDeliverable = useKernel((state) => state.addDeliverable);
   const setAgentStatus = useKernel((state) => state.setAgentStatus);
   const setIsMobile = useKernel((state) => state.setIsMobile);
   const openWindow = useKernel((state) => state.openWindow);
@@ -383,6 +502,11 @@ const App: React.FC = () => {
           localStorage.setItem('youniverse_session_token', result.sessionToken);
         }
 
+        if (result.destinationUrl) {
+          window.location.href = result.destinationUrl;
+          return;
+        }
+
         // Transition to portal animation then dialogue
         setOwnerRole('PROVISIONAL_OWNER');
         setOnboardingPhase('PORTAL_TRANSITION');
@@ -402,6 +526,8 @@ const App: React.FC = () => {
         console.warn('[ONBOARDING] Claim failed:', result.error);
         if (result.error === 'taken' || result.error === 'username-taken') {
           setClaimError("That handle has already been claimed. Please choose another.");
+        } else if (result.error === 'creator_authorization_denied' || result.error === 'creator_privilege_environment_blocked') {
+          setClaimError("Creator authorization could not be verified for this request.");
         } else if (result.error === 'network_error') {
           setClaimError("We couldn\u2019t connect to the service. Please try again.");
         } else {
@@ -488,6 +614,45 @@ const App: React.FC = () => {
       new URLSearchParams(window.location.search).get("canceled") === "true");
   const isFoundingAngelsOffer = currentPath === "/founding-angels" && !isFoundingAngelsCancel;
   const isGenesisRegistryRoute = currentPath === "/genesis";
+  const isResetPasswordRoute = currentPath === "/reset-password";
+  useEffect(() => {
+    if (!isResetPasswordRoute || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const tok = (params.get("token") || "").trim();
+    if (tok) {
+      setResetTokenFromUrl(tok);
+      window.history.replaceState(null, "", "/reset-password");
+    }
+  }, [isResetPasswordRoute]);
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetTokenFromUrl) {
+      setResetError("Missing reset token. Please request a new password reset link.");
+      return;
+    }
+    setResetSubmitting(true);
+    setResetError(null);
+    setResetSuccess(null);
+    try {
+      const res = await fetch("/api/auth/password/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: resetTokenFromUrl, newPassword: resetNewPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success) {
+        setResetSuccess(data.message || "Password reset successfully. You may now sign in.");
+        setResetNewPassword("");
+      } else {
+        setResetError(data?.message || "Unable to reset password. Request a fresh link.");
+      }
+    } catch {
+      setResetError("Could not reach password reset service. Please try again.");
+    } finally {
+      setResetSubmitting(false);
+    }
+  };
 
   const showClaimRoute = isClaimRoute;
 
@@ -510,225 +675,302 @@ const App: React.FC = () => {
 
   return (
     <ClubRadioProvider>
-    <AnimatePresence mode="sync">
-      {/* Founding Angels dedicated routes */}
-      {isFoundingAngelsSuccess ? (
-        <FoundingAngelsSuccess
-          key="fa-success"
-          onNavigate={(path: string) => {
-            window.history.pushState({}, "", path);
-            setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
-          }}
-        />
-      ) : isFoundingAngelsCancel ? (
-        <FoundingAngelsCancel
-          key="fa-cancel"
-          onNavigate={(path: string) => {
-            window.history.pushState({}, "", path);
-            setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
-          }}
-        />
-      ) : isFoundingAngelsOffer ? (
-        <FoundingAngelsOffer
-          key="fa-offer"
-          onNavigate={(path: string) => {
-            window.history.pushState({}, "", path);
-            setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
-          }}
-        />
-      ) : isGenesisRegistryRoute ? (
-        <GenesisRegistryPage
-          key="genesis-registry"
-          onNavigate={(path: string) => {
-            window.history.pushState({}, "", path);
-            setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
-          }}
-        />
-      ) : gateStillPending ? (
-        <motion.div
-          key="gate-loading"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0 }}
-          className="fixed inset-0 bg-black"
-        />
-      ) : showClaimRoute ? (
-        <ClaimYouniverse key="claim" />
-      ) : showPublicYouniverse ? (
-        <PublicYouniverse key="youniverse" handle={identity?.username || ''} onOpenLoginModal={enterSubdomainOs} />
-      ) : showGateway || showPortalTransition || showOnboardingDialogue ? (
-        /* ── FIRST-TOUCH ONBOARDING WRAPPED IN PORTAL ── */
-        <PortalBackdrop key="onboarding-portal">
-          <AnimatePresence mode="wait">
-            {showGateway && (
-              <motion.div
-                key="gateway"
-                className="w-full flex flex-col items-center justify-center"
-                exit={{ opacity: 0, scale: 1.05 }}
-                transition={{ duration: 0.8, ease: "easeInOut" }}
-              >
-                <AtLineGateway
-                  onClaim={handleGatewayClaim}
-                  isLoading={isClaimLoading}
-                  claimError={claimError}
-                />
-                {/* Brand watermark */}
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.15 }}
-                  transition={{ delay: 2, duration: 2 }}
-                  className="absolute bottom-8 text-[10px] text-white font-mono tracking-[0.3em] uppercase"
-                >
-                  The Youniverse · ItsYouOnline.com
-                </motion.p>
-              </motion.div>
-            )}
-
-            {showPortalTransition && (
-              <motion.div
-                key="portal-transition"
-                initial={{ opacity: 1 }}
-                animate={{ opacity: 0 }}
-                transition={{ duration: 1.5, ease: "easeInOut" }}
-                className="w-full flex flex-col items-center justify-center"
-              >
+      <AnimatePresence mode="sync">
+        {/* Founding Angels dedicated routes */}
+        {isFoundingAngelsSuccess ? (
+          <FoundingAngelsSuccess
+            key="fa-success"
+            onNavigate={(path: string) => {
+              window.history.pushState({}, "", path);
+              setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
+            }}
+          />
+        ) : isFoundingAngelsCancel ? (
+          <FoundingAngelsCancel
+            key="fa-cancel"
+            onNavigate={(path: string) => {
+              window.history.pushState({}, "", path);
+              setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
+            }}
+          />
+        ) : isFoundingAngelsOffer ? (
+          <FoundingAngelsOffer
+            key="fa-offer"
+            onNavigate={(path: string) => {
+              window.history.pushState({}, "", path);
+              setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
+            }}
+          />
+        ) : isGenesisRegistryRoute ? (
+          <GenesisRegistryPage
+            key="genesis-registry"
+            onNavigate={(path: string) => {
+              window.history.pushState({}, "", path);
+              setCurrentPath(path.split("?")[0].toLowerCase().replace(/\/+$/, "") || "/");
+            }}
+          />
+        ) : isResetPasswordRoute ? (
+          <PortalBackdrop key="reset-password">
+            <div className="relative z-20 w-full max-w-md mx-auto bg-zinc-900/90 border border-zinc-700/60 rounded-2xl p-6 text-zinc-100 font-mono backdrop-blur-xl shadow-2xl">
+              <h1 className="text-lg font-semibold text-white mb-2">Reset Password</h1>
+              <p className="text-xs text-zinc-400 mb-5">
+                Set a new password for your human continuity identity. All prior sessions will be revoked.
+              </p>
+              {resetError && (
+                <div className="mb-4 p-3 rounded-lg bg-amber-950/40 border border-amber-500/30 text-amber-300 text-xs">
+                  {resetError}
+                </div>
+              )}
+              {resetSuccess ? (
+                <div className="space-y-4">
+                  <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs">
+                    {resetSuccess}
+                  </div>
+                  <a
+                    href="/"
+                    className="block w-full text-center py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded-lg"
+                  >
+                    Return to Gateway
+                  </a>
+                </div>
+              ) : (
+                <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">
+                      New Password
+                    </label>
+                    <input
+                      type="password"
+                      value={resetNewPassword}
+                      onChange={(e) => setResetNewPassword(e.target.value)}
+                      placeholder="Min 10 chars, upper + lower + number"
+                      required
+                      className="w-full px-3 py-2 bg-zinc-950/80 border border-zinc-800 focus:border-emerald-500 rounded-lg text-sm text-zinc-100 outline-none"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={resetSubmitting || !resetTokenFromUrl}
+                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs rounded-lg"
+                  >
+                    {resetSubmitting ? "Updating Password..." : "Update Password"}
+                  </button>
+                </form>
+              )}
+            </div>
+          </PortalBackdrop>
+        ) : gateStillPending ? (
+          <motion.div
+            key="gate-loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0 }}
+            className="fixed inset-0 bg-black"
+          />
+        ) : showClaimRoute ? (
+          <ClaimYouniverse key="claim" />
+        ) : showPublicYouniverse ? (
+          <PublicYouniverse key="youniverse" handle={identity?.username || ''} onOpenLoginModal={enterSubdomainOs} />
+        ) : showGateway || showPortalTransition || showOnboardingDialogue ? (
+          /* ── FIRST-TOUCH ONBOARDING WRAPPED IN PORTAL ── */
+          <PortalBackdrop key="onboarding-portal">
+            <AnimatePresence mode="wait">
+              {showGateway && (
                 <motion.div
-                  initial={{ scale: 1, opacity: 1 }}
-                  animate={{ scale: 1.3, opacity: 0 }}
-                  transition={{ duration: 1.5, ease: "easeIn" }}
-                  className="text-center"
+                  key="gateway"
+                  className="w-full flex flex-col items-center justify-center"
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  transition={{ duration: 0.8, ease: "easeInOut" }}
                 >
-                  <p className="text-white/60 font-mono text-sm tracking-widest">
-                    @{onboarding.handle}
-                  </p>
+                  <AtLineGateway
+                    onClaim={handleGatewayClaim}
+                    isLoading={isClaimLoading}
+                    claimError={claimError}
+                  />
+                  {/* Brand watermark */}
                   <motion.p
                     initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.3, duration: 0.6 }}
-                    className="text-cyan-400/80 font-mono text-xs tracking-wider mt-1"
+                    animate={{ opacity: 0.15 }}
+                    transition={{ delay: 2, duration: 2 }}
+                    className="absolute bottom-8 text-[10px] text-white font-mono tracking-[0.3em] uppercase"
                   >
-                    {onboarding.handle}.itsyouonline.com
+                    The Youniverse · ItsYouOnline.com
                   </motion.p>
                 </motion.div>
-              </motion.div>
-            )}
+              )}
 
-            {showOnboardingDialogue && (
-              <motion.div
-                key="onboarding-dialogue"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.8 }}
-                className="w-full flex flex-col items-center justify-center relative z-20"
-              >
-                <OnboardingFlow
-                  handle={onboarding.handle}
+              {showPortalTransition && (
+                <motion.div
+                  key="portal-transition"
+                  initial={{ opacity: 1 }}
+                  animate={{ opacity: 0 }}
+                  transition={{ duration: 1.5, ease: "easeInOut" }}
+                  className="w-full flex flex-col items-center justify-center"
+                >
+                  <motion.div
+                    initial={{ scale: 1, opacity: 1 }}
+                    animate={{ scale: 1.3, opacity: 0 }}
+                    transition={{ duration: 1.5, ease: "easeIn" }}
+                    className="text-center"
+                  >
+                    <p className="text-white/60 font-mono text-sm tracking-widest">
+                      @{onboarding.handle}
+                    </p>
+                    <motion.p
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.3, duration: 0.6 }}
+                      className="text-cyan-400/80 font-mono text-xs tracking-wider mt-1"
+                    >
+                      {onboarding.handle}.itsyouonline.com
+                    </motion.p>
+                  </motion.div>
+                </motion.div>
+              )}
+
+              {showOnboardingDialogue && (
+                <motion.div
+                  key="onboarding-dialogue"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.8 }}
+                  className="w-full flex flex-col items-center justify-center relative z-20"
+                >
+                  <OnboardingFlow
+                    handle={onboarding.handle}
+                    email={onboarding.email}
+                    onComplete={handleOnboardingComplete}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </PortalBackdrop>
+        ) : showProvisionalDesktop ? (
+          <PortalBackdrop key="provisional-success">
+            <div className="absolute inset-0 flex flex-col items-center justify-center relative z-20">
+              {isProvisionalOwner ? (
+                <VerificationBanner
                   email={onboarding.email}
-                  onComplete={handleOnboardingComplete}
+                  handle={onboarding.handle}
+                  isVerified={onboarding.isVerified}
+                  onDismiss={() => setOnboardingPhase('GATEWAY')}
                 />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </PortalBackdrop>
-      ) : showProvisionalDesktop ? (
-        <PortalBackdrop key="provisional-success">
-          <div className="absolute inset-0 flex flex-col items-center justify-center relative z-20">
-            {isProvisionalOwner ? (
-              <VerificationBanner
-                email={onboarding.email}
-                handle={onboarding.handle}
-                isVerified={onboarding.isVerified}
-                onDismiss={() => setOnboardingPhase('GATEWAY')}
-              />
-            ) : (
-              <div className="text-emerald-400 font-mono mb-4 text-center mt-8">
-                Email verified successfully!
+              ) : (
+                <div className="text-emerald-400 font-mono mb-4 text-center mt-8">
+                  Email verified successfully!
+                </div>
+              )}
+              <div className="text-center mt-16 font-mono text-zinc-400 text-sm">
+                <p>Your Youniverse is initializing.</p>
+                <button
+                  onClick={() => setOnboardingPhase('GATEWAY')}
+                  className="mt-4 px-4 py-2 border border-zinc-700 rounded-md hover:bg-zinc-800 transition-colors"
+                >
+                  Return to Gateway
+                </button>
+                {!isProvisionalOwner && onboarding.handle && (
+                  <a
+                    href={`https://${onboarding.handle}.itsyouonline.com`}
+                    className="block mt-4 text-cyan-400 hover:underline"
+                  >
+                    Go to your Youniverse →
+                  </a>
+                )}
+              </div>
+            </div>
+          </PortalBackdrop>
+        ) : subdomainOsActive ? (
+          <motion.div
+            key="main"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1.5 }}
+            className="fixed inset-0 overflow-hidden bg-black font-sans"
+          >
+            <Desktop>
+              {windows.map((win) => {
+                const allApps = getAllApps(projectFolders, weavedWidgets);
+                const appDef = allApps.find((app) => app.id === win.appId);
+                const App = appDef?.component;
+                if (!App) return null;
+                return (
+                  <Window key={win.id || `window-${win.appId}-${Math.random()}`} {...win}>
+                    <ErrorBoundary>
+                      <Suspense
+                        fallback={
+                          <div className="h-full flex items-center justify-center bg-[hsl(var(--window-bg-hsl))] text-[hsl(var(--foreground-hsl))]">
+                            <div className="text-center">
+                              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mb-4"></div>
+                              <p>Loading App...</p>
+                            </div>
+                          </div>
+                        }
+                      >
+                        <App metadata={win.metadata} />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </Window>
+                );
+              })}
+            </Desktop>
+
+            {/* Subdomain Mode Indicator / Public Toggle */}
+            {isYouniverseRoute && (
+              <div className="fixed top-2.5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full border border-purple-500/40 bg-black/70 px-3.5 py-1 text-xs text-purple-200 backdrop-blur-md shadow-[0_0_20px_rgba(168,85,247,0.3)]">
+                <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+                <span className="font-mono font-medium">@{identity?.username} Portals OS</span>
+                {ownedYouniverses.length > 1 && (
+                  <select
+                    aria-label="Switch owned Youniverse"
+                    value={identity?.username || ""}
+                    disabled={isSwitchingYouniverse}
+                    onChange={(e) => handleSwitchYouniverse(e.target.value)}
+                    className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-mono text-cyan-200 border border-white/15 focus:outline-none hover:bg-white/15 transition-colors cursor-pointer"
+                  >
+                    {ownedYouniverses.map((owned) => (
+                      <option key={owned.identityId} value={owned.handle} className="bg-zinc-900 text-white">
+                        @{owned.handle}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {serverEntitlements?.genesis?.isWinner && (
+                  <GenesisBadge
+                    variant="pill"
+                    onClick={() => setGenesisRegistryOpen(true)}
+                    className="py-0.5 px-2.5 text-[10px]"
+                  />
+                )}
+                {ownerHasPassword === false && (
+                  <button
+                    onClick={() => {
+                      setOwnerLoginInitialMode("enroll");
+                      setIsLoginModalOpen(true);
+                    }}
+                    className="ml-1 rounded-md bg-indigo-500/25 border border-indigo-400/40 px-2 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/40 transition-colors"
+                    title="Establish a permanent password for your Human Continuity identity"
+                  >
+                    Set Password
+                  </button>
+                )}
+                <button
+                  onClick={viewPublicShowcase}
+                  className="ml-2 rounded-md bg-white/10 px-2 py-0.5 text-[10px] text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+                  title="Switch to Public Showcase Page"
+                >
+                  Public Page
+                </button>
               </div>
             )}
-            <div className="text-center mt-16 font-mono text-zinc-400 text-sm">
-              <p>Your Youniverse is initializing.</p>
-              <button
-                onClick={() => setOnboardingPhase('GATEWAY')}
-                className="mt-4 px-4 py-2 border border-zinc-700 rounded-md hover:bg-zinc-800 transition-colors"
-              >
-                Return to Gateway
-              </button>
-              {!isProvisionalOwner && onboarding.handle && (
-                <a
-                  href={`https://${onboarding.handle}.itsyouonline.com`}
-                  className="block mt-4 text-cyan-400 hover:underline"
-                >
-                  Go to your Youniverse →
-                </a>
-              )}
-            </div>
-          </div>
-        </PortalBackdrop>
-      ) : subdomainOsActive ? (
-        <motion.div
-          key="main"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1.5 }}
-          className="fixed inset-0 overflow-hidden bg-black font-sans"
-        >
-          <Desktop>
-            {windows.map((win) => {
-              const allApps = getAllApps(projectFolders, weavedWidgets);
-              const appDef = allApps.find((app) => app.id === win.appId);
-              const App = appDef?.component;
-              if (!App) return null;
-              return (
-                <Window key={win.id || `window-${win.appId}-${Math.random()}`} {...win}>
-                  <ErrorBoundary>
-                    <Suspense
-                      fallback={
-                        <div className="h-full flex items-center justify-center bg-[hsl(var(--window-bg-hsl))] text-[hsl(var(--foreground-hsl))]">
-                          <div className="text-center">
-                            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mb-4"></div>
-                            <p>Loading App...</p>
-                          </div>
-                        </div>
-                      }
-                    >
-                      <App metadata={win.metadata} />
-                    </Suspense>
-                  </ErrorBoundary>
-                </Window>
-              );
-            })}
-          </Desktop>
 
-          {/* Subdomain Mode Indicator / Public Toggle */}
-          {isYouniverseRoute && (
-            <div className="fixed top-2.5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full border border-purple-500/40 bg-black/70 px-3.5 py-1 text-xs text-purple-200 backdrop-blur-md shadow-[0_0_20px_rgba(168,85,247,0.3)]">
-              <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
-              <span className="font-mono font-medium">@{identity?.username} Portals OS</span>
-              {serverEntitlements?.genesis?.isWinner && (
-                <GenesisBadge
-                  variant="pill"
-                  onClick={() => setGenesisRegistryOpen(true)}
-                  className="py-0.5 px-2.5 text-[10px]"
-                />
-              )}
-              <button
-                onClick={viewPublicShowcase}
-                className="ml-2 rounded-md bg-white/10 px-2 py-0.5 text-[10px] text-white/70 hover:bg-white/20 hover:text-white transition-colors"
-                title="Switch to Public Showcase Page"
-              >
-                Public Page
-              </button>
-            </div>
-          )}
+            <Sidebar />
+            <VoiceAssistant />
+            <VoiceAssistantOverlay />
+            <YouuniverseRadioBar />
+            <CheckoutHandler />
 
-          <Sidebar />
-          <VoiceAssistant />
-          <VoiceAssistantOverlay />
-          <YouuniverseRadioBar />
-          <CheckoutHandler />
-
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       {/* Verification failure banner — rendered outside the routing AnimatePresence
           so it is visible regardless of current route. */}
       <AnimatePresence>
@@ -757,14 +999,35 @@ const App: React.FC = () => {
       </AnimatePresence>
       <OwnerLoginModal
         isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
+        onClose={() => {
+          setIsLoginModalOpen(false);
+          setOwnerLoginInitialMode(undefined);
+        }}
         handle={identity?.username || ''}
         onLoginSuccess={handleLoginSuccess}
+        initialMode={ownerLoginInitialMode}
       />
       {showArrivalCeremony && identity?.username && (subdomainOsActive || handoffPending) && (
         <ArrivalCeremony
           handle={identity.username}
-          onDismiss={() => setShowArrivalCeremony(false)}
+          onDismiss={() => {
+            setShowArrivalCeremony(false);
+            if (subdomainOsActive && identity?.username && ownerHasPassword === null) {
+              const token = localStorage.getItem("youniverse_session_token") || localStorage.getItem("weaver_jwt");
+              fetch(`/api/youniverse/${encodeURIComponent(identity.username)}/context`, {
+                credentials: "include",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              })
+                .then((r) => (r.ok ? r.json() : null))
+                .then((d) => {
+                  if (d?.success && d?.isOwner) {
+                    setOwnerHasPassword(typeof d.hasPassword === "boolean" ? d.hasPassword : false);
+                    if (Array.isArray(d.ownedYouniverses)) setOwnedYouniverses(d.ownedYouniverses);
+                  }
+                })
+                .catch(() => { });
+            }
+          }}
           onVerified={handleVerifiedArrival}
           onError={handleHandoffError}
         />

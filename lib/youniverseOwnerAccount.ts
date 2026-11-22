@@ -1,23 +1,36 @@
 /**
  * Authoritative owner-account contract.
  *
- * This establishes the relationship between a Youniverse identity
- * and the authenticated principal that is authorized to operate it.
- *
- * authenticationSubject is intentionally provider-neutral.
- * It must not assume email, Firebase, Supabase, OAuth, passwords,
- * or any other authentication implementation.
- *
- * It does NOT:
- * - implement authentication
- * - select an authentication provider
- * - define authorization rules
- * - define a database implementation
+ * Separates the human-level owner account (`owner_accounts`) from individual
+ * Youniverse identities (`youniverse_identities`) and tracks per-Youniverse
+ * ownership memberships (`youniverse_owner_memberships`).
  */
 
 export interface YouniverseOwnerAccount {
   accountId: string;
   identityId: string;
   authenticationSubject: string;
+  createdAt: string;
+}
+
+export interface OwnerAccountRecord {
+  accountId: string;
+  primaryEmail: string;
+  emailVerifiedAt: string | null;
+  isCreator: boolean;
+  creatorProvisionedAt: string | null;
+  creatorProvisionedBy: string | null;
+  status: "active" | "suspended" | "revoked";
+  createdAt: string;
+}
+
+export interface YouniverseOwnerMembershipRecord {
+  id: string;
+  accountId: string;
+  identityId: string;
+  role: "owner";
+  status: "active" | "suspended" | "revoked";
+  claimSource: "standard" | "creator_override" | "paid" | "backfill";
+  verifiedAt: string | null;
   createdAt: string;
 }

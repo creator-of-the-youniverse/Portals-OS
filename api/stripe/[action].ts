@@ -13,6 +13,11 @@ import { neon } from "@neondatabase/serverless";
 import { nanoid } from "nanoid";
 import { authenticateRequest } from "../../lib/serverlessAuth.ts";
 import {
+  assertSafeDatabaseTarget,
+  enforceAntiCsrf,
+  extractTenantOriginHandle,
+} from "../../lib/creatorOwnership.ts";
+import {
   createFoundingAngelCheckoutSession,
   handleCheckoutSessionCompleted,
   handleDisputeEvent,
@@ -79,7 +84,7 @@ async function getRawBody(req: any): Promise<Buffer> {
 }
 
 /** Handler for POST /api/stripe/create-checkout */
-async function handleCreateCheckout(req: any, res: any, stripeSecret: string) {
+async function handleCreateCheckout(req: any, res: any, stripeSecret: string, deps: any = {}) {
   if (req.method !== "POST") {
     return res.status(405).json({ status: "method-not-allowed" });
   }
@@ -118,10 +123,32 @@ async function handleCreateCheckout(req: any, res: any, stripeSecret: string) {
     });
   }
 
-  const cleanHandle = handle.trim().toLowerCase().replace(/^@+/, "").replace(/[^a-z0-9_-]/g, "-");
-  const origin = req.headers.origin || "https://itsyouonline.com";
+  const normalizedHeaders =
+    !req?.headers?.origin && req?.headers?.Origin
+      ? { ...req.headers, origin: req.headers.Origin }
+      : req?.headers;
+  const csrfReq = normalizedHeaders === req?.headers ? req : { ...req, headers: normalizedHeaders };
+  const csrf = enforceAntiCsrf(csrfReq, deps?.env ?? process.env);
+  if (csrf.blocked) {
+    return res.status(403).json({
+      status: "csrf_rejected",
+      error: "csrf_rejected",
+      message: csrf.reason,
+    });
+  }
 
-  const stripe = new Stripe(stripeSecret, { apiVersion: "2026-08-26.dahlia" });
+  const cleanHandle = handle.trim().toLowerCase().replace(/^@+/, "").replace(/[^a-z0-9_-]/g, "-");
+  let trustedOrigin: string;
+  try {
+    trustedOrigin = resolveTrustedOrigin(req, deps?.env ?? process.env);
+  } catch (err: any) {
+    return res.status(400).json({
+      status: "invalid-origin",
+      message: err?.message || "Invalid origin.",
+    });
+  }
+
+  const stripe = deps?.stripe ?? new Stripe(stripeSecret, { apiVersion: "2026-08-26.dahlia" });
 
   try {
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = pack.stripePriceId
@@ -153,8 +180,8 @@ async function handleCreateCheckout(req: any, res: any, stripeSecret: string) {
         packId,
         slots: String(pack.slots),
       },
-      success_url: `${origin}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}&handle=${encodeURIComponent(cleanHandle)}`,
-      cancel_url: `${origin}/?claim=${encodeURIComponent(cleanHandle)}`,
+      success_url: `${trustedOrigin}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}&handle=${encodeURIComponent(cleanHandle)}`,
+      cancel_url: `${trustedOrigin}/?claim=${encodeURIComponent(cleanHandle)}`,
       allow_promotion_codes: true,
     });
 
@@ -365,6 +392,43 @@ async function handleFoundingAngelCheckout(req: any, res: any, stripeSecret: str
     return res.status(errorAuth.status).json({ status: errorAuth.error, message: errorAuth.message });
   }
 
+  const hasOriginHeader = Boolean(req?.headers?.origin ?? req?.headers?.Origin);
+  const rawAuthHeader = req?.headers?.authorization ?? req?.headers?.Authorization;
+  const hasBearerAuth =
+    typeof rawAuthHeader === "string" &&
+    rawAuthHeader.startsWith("Bearer ") &&
+    rawAuthHeader.slice(7).trim().length > 0;
+
+  if (hasOriginHeader || !hasBearerAuth) {
+    const normalizedHeaders =
+      !req?.headers?.origin && req?.headers?.Origin
+        ? { ...req.headers, origin: req.headers.Origin }
+        : req?.headers;
+    const csrfReq = normalizedHeaders === req?.headers ? req : { ...req, headers: normalizedHeaders };
+    const csrf = enforceAntiCsrf(csrfReq, deps?.env ?? process.env, {
+      allowSameOriginTenantSubdomain: true,
+    });
+    if (csrf.blocked) {
+      return res.status(403).json({
+        status: "csrf_rejected",
+        error: "csrf_rejected",
+        message: csrf.reason,
+      });
+    }
+  }
+
+  const originTenantHandle = extractTenantOriginHandle(req);
+  if (
+    originTenantHandle &&
+    (!auth.user?.handle || originTenantHandle !== String(auth.user.handle).toLowerCase())
+  ) {
+    return res.status(403).json({
+      status: "csrf_rejected",
+      error: "csrf_rejected",
+      message: "Origin tenant handle does not match authorized target Youniverse.",
+    });
+  }
+
   let trustedOrigin: string;
   try {
     trustedOrigin = resolveTrustedOrigin(req);
@@ -452,6 +516,9 @@ async function handleWebhook(req: any, res: any, stripeSecret: string, deps: any
   if (!webhookSecret || !databaseUrl) {
     console.error("[webhook] Missing env vars (STRIPE_WEBHOOK_SECRET or DATABASE_URL)");
     return res.status(500).json({ status: "configuration-error" });
+  }
+  if (!deps.sql && !deps.pool) {
+    assertSafeDatabaseTarget(databaseUrl, deps?.env ?? process.env);
   }
 
   const stripe = deps.stripe ?? new Stripe(stripeSecret, { apiVersion: "2026-08-26.dahlia" });
@@ -610,7 +677,7 @@ export default async function handler(req: any, res: any, deps: any = {}) {
 
   switch (action) {
     case "create-checkout":
-      return handleCreateCheckout(req, res, stripeSecret);
+      return handleCreateCheckout(req, res, stripeSecret, deps);
     case "founding-angels-checkout":
       return handleFoundingAngelCheckout(req, res, stripeSecret, deps);
     case "founding-angels-status":

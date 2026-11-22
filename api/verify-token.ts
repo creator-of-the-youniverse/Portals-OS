@@ -27,6 +27,12 @@ import { resolveYouniverseRoute, YOUNIVERSE_ROOT_DOMAIN } from "../lib/younivers
 import { resolveYouniverseConfiguration, type FoundationLaw } from "../lib/foundationSynthesis.ts";
 import { createSession } from "../lib/neonSession.ts";
 import { resolveIdentityEntitlements } from "../lib/entitlements.ts";
+import {
+  assertSafeDatabaseTarget,
+  buildSessionCookieHeader,
+  checkCreatorIdentityRuntimeAccess,
+  syncVerifiedOwnerMembership,
+} from "../lib/creatorOwnership.ts";
 
 function firstHeaderValue(value: unknown): string {
   if (Array.isArray(value)) return typeof value[0] === "string" ? value[0] : "";
@@ -67,6 +73,7 @@ export interface VerifyTokenDeps {
   createSession?: typeof createSession;
   verifyHandoffToken?: typeof verifyHandoffToken;
   resolveTrustedHandoffAudience?: typeof resolveTrustedHandoffAudience;
+  env?: Record<string, string | undefined>;
 }
 
 export default async function handler(req: any, res: any, deps: VerifyTokenDeps = {}) {
@@ -77,6 +84,9 @@ export default async function handler(req: any, res: any, deps: VerifyTokenDeps 
   const databaseUrl = deps.databaseUrl ?? process.env.DATABASE_URL;
   if (!databaseUrl && !deps.sql) {
     return res.status(500).json({ success: false, error: "database_not_configured", message: "Database not configured." });
+  }
+  if (!deps.sql) {
+    assertSafeDatabaseTarget(databaseUrl, deps?.env ?? process.env);
   }
 
   const sql = deps.sql ?? neon(databaseUrl!);
@@ -131,7 +141,7 @@ export default async function handler(req: any, res: any, deps: VerifyTokenDeps 
 
     // 4. Verify identity exists, is live, and email is verified
     const identityRows = await sql`
-      SELECT identity_id, username, plan, is_live, email_verified_at
+      SELECT identity_id, username, email, plan, is_live, email_verified_at
       FROM youniverse_identities
       WHERE username = ${payload.handle}
       LIMIT 1;
@@ -163,16 +173,59 @@ export default async function handler(req: any, res: any, deps: VerifyTokenDeps 
       });
     }
 
+    const creatorRuntimeCheck = await checkCreatorIdentityRuntimeAccess(
+      sql,
+      String(identity.identity_id),
+      { env: deps.env, databaseUrl }
+    );
+    if (!creatorRuntimeCheck.allowed) {
+      return res.status(403).json({
+        success: false,
+        error: creatorRuntimeCheck.error,
+        message: creatorRuntimeCheck.message,
+      });
+    }
+
+    await syncVerifiedOwnerMembership(sql, {
+      identityId: String(identity.identity_id),
+      email: identity.email ? String(identity.email) : undefined,
+      verifiedAt: identity.email_verified_at,
+    });
+
     // 5. Establish authenticated Neon owner session for this destination origin
+    let linkedHumanId: string | undefined;
+    try {
+      const assocRows = await sql`
+        SELECT human_id
+        FROM human_youniverse_associations
+        WHERE identity_id = ${String(identity.identity_id)}
+          AND role = 'owner'
+          AND verification_status = 'verified'
+          AND revoked_at IS NULL
+        ORDER BY is_homeverse DESC, created_at ASC
+        LIMIT 1
+      `;
+      if (Array.isArray(assocRows) && assocRows.length > 0 && assocRows[0]?.human_id) {
+        linkedHumanId = String(assocRows[0].human_id);
+      }
+    } catch {
+      // Non-fatal if table unavailable in unmigrated/mock environment
+    }
+
     const userAgent = firstHeaderValue(req.headers?.["user-agent"]) || null;
     const ipAddress = (req.headers?.["x-forwarded-for"] as string | undefined)
       ?.split(",")[0]?.trim() ?? null;
 
     const { rawToken, expiresAt } = await createSessionFn(sql, identity.identity_id, {
+      ...(linkedHumanId ? { humanId: linkedHumanId } : {}),
       ttlSeconds: 60 * 60 * 24 * 7, // 7 days
       userAgent,
       ipAddress,
     });
+
+    if (typeof res.setHeader === "function") {
+      res.setHeader("Set-Cookie", buildSessionCookieHeader(rawToken, req, 60 * 60 * 24 * 7));
+    }
 
     // 6. Synthesize runtime workspace config
     const rawLaws: string[] = Array.isArray((identity as any).foundation?.laws)
@@ -200,7 +253,8 @@ export default async function handler(req: any, res: any, deps: VerifyTokenDeps 
     return res.status(200).json({
       success: true,
       handle: payload.handle,
-      sessionToken: rawToken,
+      // sessionToken is intentionally omitted: delivered exclusively via HttpOnly Set-Cookie.
+      // Callers must not rely on a bearer token in the JSON body.
       expiresAt: expiresAt.toISOString(),
       workspaceConfig,
       entitlements,

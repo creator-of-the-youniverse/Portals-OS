@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Globe, Lock, ShieldCheck, Terminal, Cpu, ArrowUpRight } from 'lucide-react';
 import { GenesisBadge, GenesisRegistryModal } from './genesis';
+import WeaverSandbox from './weaver/WeaverSandbox';
 
 interface PublicYouniverseProps {
   handle: string;
@@ -10,9 +11,13 @@ interface PublicYouniverseProps {
 interface PublicWidget {
   id: string;
   title: string;
-  content: {
+  code?: string;
+  dependencies?: string[];
+  publishedAt?: string | null;
+  content?: {
     type: string;
     code?: string;
+    dependencies?: string[];
   };
   updatedAt: string;
 }
@@ -161,23 +166,34 @@ export default function PublicYouniverse({ handle, onOpenLoginModal }: PublicYou
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {widgets.map((widget) => (
-                <div 
-                  key={widget.id}
-                  className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-5 hover:border-zinc-700 transition-all flex flex-col justify-between shadow-lg"
-                >
-                  <div>
-                    <h4 className="font-semibold text-sm text-zinc-200 mb-1">{widget.title}</h4>
-                    <p className="text-xs text-zinc-500 font-mono">
-                      {widget.content?.type || 'REACT_WIDGET'} • ID: {widget.id.slice(0, 8)}
-                    </p>
+              {widgets.map((widget) => {
+                const widgetCode = widget.code ?? widget.content?.code ?? null;
+                return (
+                  <div 
+                    key={widget.id}
+                    className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-5 hover:border-zinc-700 transition-all flex flex-col justify-between shadow-lg"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <h4 className="font-semibold text-sm text-zinc-200 truncate">{widget.title}</h4>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                          Published
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-500 font-mono mb-3">
+                        {widget.content?.type || 'REACT_WIDGET'} • ID: {widget.id.slice(0, 8)}
+                      </p>
+                      <div className="h-56 w-full rounded-lg overflow-hidden border border-zinc-800/90 bg-zinc-950/90">
+                        <WeaverSandbox code={widgetCode} componentName={widget.title} />
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400 font-mono">
+                      <span className="text-emerald-500/80">● Live</span>
+                      <span className="text-zinc-500">{new Date(widget.updatedAt).toLocaleDateString()}</span>
+                    </div>
                   </div>
-                  <div className="mt-6 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400 font-mono">
-                    <span className="text-emerald-500/80">● Live</span>
-                    <span className="text-zinc-500">{new Date(widget.updatedAt).toLocaleDateString()}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

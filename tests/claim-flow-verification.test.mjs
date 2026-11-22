@@ -358,7 +358,11 @@ test("7. Email verification link completes ownership and mints authenticated ses
   assert.strictEqual(verifyRes.body.success, true);
   assert.strictEqual(verifyRes.body.handle, "star-pilot");
   assert.strictEqual(verifyRes.body.role, "AUTHENTICATED_OWNER");
-  assert.ok(verifyRes.body.sessionToken);
+  // Security contract (Phase 2 R3): raw session token is NOT returned in the JSON response body.
+  // It is delivered exclusively via an HttpOnly Set-Cookie header to prevent token leakage.
+  assert.strictEqual(verifyRes.body.sessionToken, undefined, "sessionToken must NOT appear in JSON response");
+  assert.ok(verifyRes.body.handoffToken, "handoffToken must be present");
+  assert.ok(verifyRes.body.destinationUrl, "destinationUrl must be present");
 
   // DB reflects verified state
   assert.ok(identities[0].email_verified_at !== null);

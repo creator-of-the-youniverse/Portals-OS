@@ -50,6 +50,16 @@ export function buildVerificationUrl(token: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/api/v1/auth/verify?token=${encodeURIComponent(token)}`;
 }
 
+/**
+ * Generates the user-facing password reset URL using canonical APP_URL (never request Host).
+ */
+export function buildPasswordResetUrl(token: string): string {
+  const baseUrl =
+    process.env.APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:5174");
+  return `${baseUrl.replace(/\/+$/, "")}/reset-password?token=${encodeURIComponent(token)}`;
+}
+
 export const DEFAULT_EMAIL_FROM = "onboarding@itsyouonline.com";
 
 const PLAIN_EMAIL_RE = /^[a-z0-9._%+-]+@([a-z0-9-]+\.)+[a-z]{2,}$/i;
@@ -149,6 +159,80 @@ export async function sendVerificationEmail(
     };
   } catch (err: any) {
     console.error("[emailService] Network failure during email delivery");
+    return {
+      sent: false,
+      reason: "delivery_failed",
+      error: err?.message || "Network error",
+    };
+  }
+}
+
+export interface SendPasswordResetEmailParams {
+  email: string;
+  resetUrl: string;
+}
+
+/**
+ * Dispatches a password reset link via Resend using configured EMAIL_FROM.
+ */
+export async function sendPasswordResetEmail(
+  params: SendPasswordResetEmailParams,
+  fetchFn: typeof fetch = fetch
+): Promise<EmailDeliveryResult> {
+  const { email, resetUrl } = params;
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const fromAddress = resolveSenderAddress(process.env.EMAIL_FROM);
+
+  if (!apiKey) {
+    console.warn("[emailService] RESEND_API_KEY is not set. Password reset email could not be delivered.");
+    return {
+      sent: false,
+      reason: "missing_api_key",
+      error: "Email delivery service is not configured.",
+    };
+  }
+
+  try {
+    const res = await fetchFn("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: [email],
+        subject: "Reset your ItsYouOnline password",
+        html: `
+          <div style="font-family: sans-serif; background: #000; color: #fff; padding: 24px; border-radius: 8px;">
+            <h2 style="color: #06b6d4;">THE YOUNIVERSE</h2>
+            <p>A password reset was requested for your human identity.</p>
+            <p style="margin: 24px 0;">
+              <a href="${resetUrl}" style="background: #10b981; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+                Reset Password
+              </a>
+            </p>
+            <p style="color: #666; font-size: 12px;">This link will expire in 15 minutes. If you did not request a reset, you can ignore this email.</p>
+          </div>
+        `,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("[emailService] Upstream provider rejected password reset delivery:", res.status);
+      return {
+        sent: false,
+        reason: "delivery_failed",
+        error: `Provider responded with status ${res.status}`,
+      };
+    }
+
+    return {
+      sent: true,
+      reason: "delivered",
+    };
+  } catch (err: any) {
+    console.error("[emailService] Network failure during password reset email delivery");
     return {
       sent: false,
       reason: "delivery_failed",

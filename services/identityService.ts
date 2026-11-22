@@ -60,21 +60,46 @@ export async function claimHandle(
   payload: ClaimRequest
 ): Promise<ClaimResponse> {
   const subdomain = `${payload.handle}.itsyouonline.com`;
+  const sessionToken =
+    typeof localStorage !== "undefined"
+      ? localStorage.getItem("youniverse_session_token") ||
+        localStorage.getItem("weaver_jwt")
+      : null;
 
   try {
-    const res = await fetch("/api/claim", {
+    let res = await fetch("/api/claim", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
 
+    if (res.status === 401 && sessionToken) {
+      if (typeof localStorage !== "undefined") {
+        localStorage.removeItem("youniverse_session_token");
+        localStorage.removeItem("weaver_jwt");
+      }
+      res = await fetch("/api/claim", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    }
+
     const data = await res.json().catch(() => ({}));
 
-    if (res.status === 201 && (data.status === "created" || data.status === "pending_verification" || data.success === true)) {
+    if (res.status === 201 && (data.status === "created" || data.status === "pending_verification" || data.status === "verified_creator_claim" || data.success === true)) {
       return {
         success: true,
         subdomain: data.subdomain ?? subdomain,
         sessionToken: data.sessionToken,
+        handoffToken: data.handoffToken,
+        destinationUrl: data.destinationUrl,
+        status: data.status,
       };
     }
 
@@ -84,6 +109,14 @@ export async function claimHandle(
 
     if (res.status === 402 || data.status === "payment_required") {
       return { success: false, subdomain, error: "payment_required" };
+    }
+
+    if (res.status === 403) {
+      return {
+        success: false,
+        subdomain,
+        error: data.error || data.message || "forbidden",
+      };
     }
 
     console.warn("[identityService] Claim rejected:", res.status, data.status);
