@@ -57,25 +57,14 @@ export const FoundingAngelsSuccess: React.FC<FoundingAngelsSuccessProps> = ({ on
         localStorage.getItem("youniverse_session_token") ||
         localStorage.getItem("weaver_jwt");
       setSessionToken(token);
-
-      if (!token) {
-        setStatus("unauthenticated");
-        setLoading(false);
-      }
     }
   }, []);
 
-  // Poll or query status
+  // Poll or query status (supports both HttpOnly session cookie and optional legacy Bearer token)
   const checkStatus = async (tokenOverride?: string) => {
     if (isRequestInFlightRef.current) return;
 
     const token = tokenOverride || sessionToken;
-    if (!token) {
-      setStatus("unauthenticated");
-      setLoading(false);
-      return;
-    }
-
     if (!sessionId) {
       setStatus("not_found");
       setErrorMessage("No checkout session ID provided in the return URL.");
@@ -86,17 +75,21 @@ export const FoundingAngelsSuccess: React.FC<FoundingAngelsSuccessProps> = ({ on
     isRequestInFlightRef.current = true;
 
     try {
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
       const res = await fetch(
         `/api/stripe/founding-angels-status?session_id=${encodeURIComponent(sessionId)}`,
         {
           method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: "include",
+          headers,
         }
       );
 
       if (res.status === 401) {
+        setSessionToken(null);
         setStatus("unauthenticated");
         setErrorMessage("Your session has expired. Please sign in to view your membership.");
         setLoading(false);
@@ -132,7 +125,7 @@ export const FoundingAngelsSuccess: React.FC<FoundingAngelsSuccessProps> = ({ on
           if (currentCount < 15 && elapsed < 30000) {
             clearTimer();
             pollTimerRef.current = setTimeout(() => {
-              checkStatus(token);
+              checkStatus(token ?? undefined);
             }, 2000);
           } else {
             setLoading(false);
@@ -179,7 +172,7 @@ export const FoundingAngelsSuccess: React.FC<FoundingAngelsSuccessProps> = ({ on
     startTimeRef.current = Date.now();
     setPollCount(0);
 
-    if (sessionToken && sessionId) {
+    if (sessionId) {
       checkStatus();
     }
     return () => {
@@ -188,13 +181,13 @@ export const FoundingAngelsSuccess: React.FC<FoundingAngelsSuccessProps> = ({ on
   }, [sessionToken, sessionId]);
 
   const handleLoginSuccess = (token: string) => {
-    setSessionToken(token);
+    setSessionToken(token || null);
     setIsLoginModalOpen(false);
     setLoading(true);
     pollCountRef.current = 0;
     startTimeRef.current = Date.now();
     setPollCount(0);
-    checkStatus(token);
+    checkStatus(token || undefined);
   };
 
   const navigateTo = (path: string) => {

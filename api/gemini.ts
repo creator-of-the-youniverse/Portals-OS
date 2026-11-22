@@ -389,38 +389,81 @@ export default async function handler(req: any, res: any, deps?: GeminiHandlerDe
         });
     }
 
+    let identityRow: any = null;
+    try {
+        const idRows = await sql`
+            SELECT identity_id, username, email, plan, is_live, email_verified_at
+            FROM youniverse_identities
+            WHERE identity_id = ${String(sessionValidation.identityId)}
+            LIMIT 1
+        `;
+        identityRow = Array.isArray(idRows) && idRows.length > 0 ? idRows[0] : null;
+    } catch {
+        console.error('Session identity lookup store error');
+        return res.status(500).json({
+            error: 'session_store_unavailable',
+            message: 'Authentication service temporarily unavailable.',
+        });
+    }
+
+    if (identityRow) {
+        if (!identityRow.is_live) {
+            return res.status(403).json({
+                error: 'youniverse_suspended',
+                message: 'This Youniverse is suspended.',
+            });
+        }
+        if (!identityRow.email_verified_at) {
+            return res.status(403).json({
+                error: 'email_not_verified',
+                message: 'Email verification required before accessing protected features.',
+            });
+        }
+    } else if (!deps?.validateSession) {
+        return res.status(401).json({
+            error: 'invalid_token',
+            message: 'Session is invalid, expired, or revoked.',
+        });
+    }
+
     const originTenantHandle = extractTenantOriginHandle(csrfReq);
     if (originTenantHandle) {
-        let tenantAuthorized = false;
-        try {
-            const idRows = await sql`
-                SELECT identity_id, username, email, plan, is_live, email_verified_at
-                FROM youniverse_identities
-                WHERE identity_id = ${String(sessionValidation.identityId)}
-                LIMIT 1
-            `;
-            const identityRow = Array.isArray(idRows) && idRows.length > 0 ? idRows[0] : null;
-            if (identityRow) {
-                const targetAuth = await resolveAuthorizedTargetYouniverse(
-                    sql,
-                    { headers: { ...normalizedHeaders, 'x-youniverse-handle': originTenantHandle } },
-                    {
-                        identity_id: String(identityRow.identity_id),
-                        username: String(identityRow.username),
-                        human_id: sessionValidation.humanId ?? null,
-                        email: identityRow.email ?? null,
-                        plan: identityRow.plan ?? null,
-                        is_live: Boolean(identityRow.is_live),
-                        email_verified_at: identityRow.email_verified_at,
-                    },
-                    { env: deps?.env, databaseUrl }
-                );
-                tenantAuthorized = Boolean(targetAuth.ok);
-            }
-        } catch {
-            tenantAuthorized = false;
+        if (!identityRow) {
+            return res.status(403).json({
+                error: 'csrf_rejected',
+                message: 'Origin tenant handle does not match authorized target Youniverse.',
+            });
         }
-        if (!tenantAuthorized) {
+        let targetAuth: any;
+        try {
+            targetAuth = await resolveAuthorizedTargetYouniverse(
+                sql,
+                { headers: { ...normalizedHeaders, 'x-youniverse-handle': originTenantHandle } },
+                {
+                    identity_id: String(identityRow.identity_id),
+                    username: String(identityRow.username),
+                    human_id: sessionValidation.humanId ?? null,
+                    email: identityRow.email ?? null,
+                    plan: identityRow.plan ?? null,
+                    is_live: Boolean(identityRow.is_live),
+                    email_verified_at: identityRow.email_verified_at,
+                },
+                { env: deps?.env, databaseUrl }
+            );
+        } catch {
+            console.error('Tenant authorization store error');
+            return res.status(500).json({
+                error: 'session_store_unavailable',
+                message: 'Authentication service temporarily unavailable.',
+            });
+        }
+        if (!targetAuth?.ok) {
+            if (targetAuth?.status === 404) {
+                return res.status(404).json({
+                    error: targetAuth.error || 'youniverse_not_found',
+                    message: targetAuth.message || 'Target Youniverse not found.',
+                });
+            }
             return res.status(403).json({
                 error: 'csrf_rejected',
                 message: 'Origin tenant handle does not match authorized target Youniverse.',

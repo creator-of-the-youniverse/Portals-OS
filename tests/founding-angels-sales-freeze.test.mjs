@@ -81,10 +81,10 @@ async function runTests() {
   // ── 1. Unit Tests: isFoundingAngelsSalesEnabled ───────────────────────────────
   console.log("--- 1. Testing isFoundingAngelsSalesEnabled() ---");
 
-  // Default enabled when unset or empty
-  assert.strictEqual(isFoundingAngelsSalesEnabled({}), true, "Unset env must default to true");
-  assert.strictEqual(isFoundingAngelsSalesEnabled({ FOUNDING_ANGELS_SALES_ENABLED: "" }), true, "Empty string must default to true");
-  assert.strictEqual(isFoundingAngelsSalesEnabled({ FOUNDING_ANGELS_SALES_ENABLED: "   " }), true, "Whitespace must default to true");
+  // Fail-closed when unset or empty
+  assert.strictEqual(isFoundingAngelsSalesEnabled({}), false, "Unset env must fail closed to false");
+  assert.strictEqual(isFoundingAngelsSalesEnabled({ FOUNDING_ANGELS_SALES_ENABLED: "" }), false, "Empty string must fail closed to false");
+  assert.strictEqual(isFoundingAngelsSalesEnabled({ FOUNDING_ANGELS_SALES_ENABLED: "   " }), false, "Whitespace must fail closed to false");
 
   // Explicit true
   assert.strictEqual(isFoundingAngelsSalesEnabled({ FOUNDING_ANGELS_SALES_ENABLED: "true" }), true, "'true' must return true");
@@ -158,6 +158,46 @@ async function runTests() {
     "createFoundingAngelCheckoutSession must reject when env is invalid"
   );
 
+  // Via unset env (fail-closed)
+  await assert.rejects(
+    async () => {
+      await createFoundingAngelCheckoutSession("usr_test123", "https://itsyouonline.com", {
+        env: {},
+      });
+    },
+    (err) => {
+      assert.strictEqual(err.code, "SALES_PAUSED");
+      assert.strictEqual(err.name, "FoundingAngelSalesPausedError");
+      return true;
+    },
+    "createFoundingAngelCheckoutSession must reject with FoundingAngelSalesPausedError when env is unset"
+  );
+
+  // Via incomplete founding_angels_platform_setup even if salesEnabled is true
+  await assert.rejects(
+    async () => {
+      await createFoundingAngelCheckoutSession("usr_test123", "https://itsyouonline.com", {
+        salesEnabled: true,
+        pool: {
+          connect: async () => ({
+            query: async (sql) => {
+              if (sql.includes("FROM public.founding_angels_platform_setup")) {
+                return { rows: [{ is_completed: false, completed_at: null }] };
+              }
+              return { rows: [] };
+            },
+            release: () => {},
+          }),
+        },
+      });
+    },
+    (err) => {
+      assert.strictEqual(err.code, "SALES_PAUSED");
+      return true;
+    },
+    "createFoundingAngelCheckoutSession must reject when platform setup is incomplete"
+  );
+
   console.log("✔ createFoundingAngelCheckoutSession correctly blocks checkout under all pause conditions\n");
 
   // ── 4. Dispatcher: POST /api/stripe/founding-angels-checkout ────────────────
@@ -227,11 +267,32 @@ async function runTests() {
       },
     };
 
+    // 4a-unset. When env unset: returns 503 (fail closed)
+    {
+      const { req, res } = createMockReqRes({
+        method: "POST",
+        url: "/api/stripe/founding-angels-checkout",
+        headers: { host: "itsyouonline.com", origin: "https://itsyouonline.com" },
+      });
+
+      await handler(req, res, {
+        authenticateRequest: mockAuthSuccess,
+        env: {},
+      });
+
+      assert.strictEqual(res.statusCode, 503, "Unset env must fail closed to 503");
+      assert.strictEqual(res.bodyData?.error, "SALES_PAUSED");
+      console.log("✔ Dispatcher fails closed to 503 when FOUNDING_ANGELS_SALES_ENABLED is unset");
+    }
+
     // Mock DB queries for createFoundingAngelCheckoutSession
     const mockPool = {
       connect: async () => ({
         query: async (sql) => {
           if (sql.includes("pg_advisory_xact_lock")) return { rows: [] };
+          if (sql.includes("FROM public.founding_angels_platform_setup")) {
+            return { rows: [{ is_completed: true, completed_at: new Date().toISOString() }] };
+          }
           if (sql.includes("LIMIT 1")) return { rows: [] }; // no active checkouts
           if (sql.includes("public.founding_angel_memberships")) return { rows: [{ cnt: 10 }] };
           if (sql.includes("checkout_expires_at > NOW()")) return { rows: [{ cnt: 0 }] };

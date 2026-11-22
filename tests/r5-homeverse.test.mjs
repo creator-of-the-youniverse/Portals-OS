@@ -32,175 +32,15 @@ import {
   canClaimRelinquishedHandle,
 } from "../lib/homeverseRelinquishment.ts";
 
-// ── In-memory DB mock ─────────────────────────────────────────────────────────
-
-function makeDb() {
-  const associations = []; // { id, human_id, identity_id, role, verification_status, is_homeverse, revoked_at }
-  const relinquishments = []; // RelinquishmentRecord rows
-
-  /**
-   * sql template-literal mock.
-   * Dispatches on the first keyword of the SQL text to handle SELECT / UPDATE / INSERT.
-   */
-  const sql = async (strings, ...values) => {
-    const query = String(strings[0] ?? "").trim().toUpperCase();
-
-    // ── SELECT ────────────────────────────────────────────────────────────────
-    if (query.startsWith("SELECT")) {
-      const raw = String(strings[0]).toLowerCase();
-
-      // associations table
-      if (raw.includes("human_youniverse_associations")) {
-        return associations.filter((a) => {
-          for (let i = 0; i < values.length; i++) {
-            const seg = String(strings[i + 1] ?? "").trim().toLowerCase();
-            if (seg.startsWith("and status =") || seg.includes("= 'pending'")) continue;
-            // human_id match
-            if (
-              (raw.includes("human_id =") || strings.some((s) => String(s).includes("human_id ="))) &&
-              a.human_id !== values.find((v) => v === a.human_id)
-            ) {
-              // best-effort pass-through; will filter below
-            }
-          }
-          return true;
-        });
-      }
-
-      // relinquishments table
-      if (raw.includes("homeverse_relinquishments")) {
-        return relinquishments;
-      }
-
-      return [];
-    }
-
-    // ── UPDATE ────────────────────────────────────────────────────────────────
-    if (query.startsWith("UPDATE")) {
-      const raw = String(strings[0]).toLowerCase();
-
-      if (raw.includes("human_youniverse_associations")) {
-        // Parse SET and WHERE clauses from interleaved strings+values
-        const fullSql = strings.reduce((acc, s, i) => acc + s + (values[i] !== undefined ? `'${values[i]}'` : ""), "");
-        const setIsHomeverseTrue = /is_homeverse\s*=\s*true/i.test(fullSql);
-        const setIsHomeverseF = /is_homeverse\s*=\s*false/i.test(fullSql);
-        const setRelinquished = /verification_status\s*=\s*'relinquished'/i.test(fullSql);
-
-        // Extract the identity_id value: appears after "identity_id ="
-        const identityMatch = fullSql.match(/identity_id\s*=\s*'([^']+)'/g);
-        const humanMatch = fullSql.match(/human_id\s*=\s*'([^']+)'/);
-        const humanId = humanMatch ? humanMatch[1] : null;
-
-        if (identityMatch) {
-          for (const idExpr of identityMatch) {
-            const idVal = idExpr.match(/'([^']+)'/)?.[1];
-            const assoc = associations.find(
-              (a) =>
-                a.identity_id === idVal &&
-                (humanId ? a.human_id === humanId : true) &&
-                a.revoked_at == null
-            );
-            if (assoc) {
-              if (setIsHomeverseTrue) {
-                const conflictingHomeverse = associations.find(
-                  (other) =>
-                    other.human_id === assoc.human_id &&
-                    other.identity_id !== assoc.identity_id &&
-                    other.is_homeverse === true &&
-                    other.verification_status === "verified" &&
-                    other.revoked_at == null
-                );
-                if (
-                  conflictingHomeverse &&
-                  assoc.verification_status === "verified" &&
-                  assoc.revoked_at == null
-                ) {
-                  const err = new Error(
-                    'duplicate key value violates unique constraint "human_singleton_homeverse_idx"'
-                  );
-                  err.code = "23505";
-                  throw err;
-                }
-                assoc.is_homeverse = true;
-              }
-              if (setIsHomeverseF) assoc.is_homeverse = false;
-              if (setRelinquished) assoc.verification_status = "relinquished";
-            }
-          }
-        }
-        return [];
-      }
-
-      if (raw.includes("homeverse_relinquishments")) {
-        // Parse out id value
-        const fullSql = strings.reduce((acc, s, i) => acc + s + (values[i] !== undefined ? `'${values[i]}'` : ""), "");
-        const idMatch = fullSql.match(/id\s*=\s*'([^']+)'/);
-        const idVal = idMatch ? idMatch[1] : null;
-        const record = idVal ? relinquishments.find((r) => r.id === idVal) : null;
-
-        if (record) {
-          if (/status\s*=\s*'cancelled'/i.test(fullSql)) {
-            record.status = "cancelled";
-            const cancelledAtMatch = fullSql.match(/cancelled_at\s*=\s*'([^']+)'/);
-            if (cancelledAtMatch) record.cancelled_at = cancelledAtMatch[1];
-          }
-          if (/status\s*=\s*'completed'/i.test(fullSql)) {
-            record.status = "completed";
-            const completedAtMatch = fullSql.match(/completed_at\s*=\s*'([^']+)'/);
-            if (completedAtMatch) record.completed_at = completedAtMatch[1];
-          }
-          const auditMatch = fullSql.match(/audit_log\s*=\s*'(\[.*?\])'/s);
-          if (auditMatch) {
-            try { record.audit_log = JSON.parse(auditMatch[1]); } catch { /* ignore */ }
-          }
-        }
-        return [];
-      }
-
-      return [];
-    }
-
-    // ── INSERT ────────────────────────────────────────────────────────────────
-    if (query.startsWith("INSERT")) {
-      const raw = String(strings[0]).toLowerCase();
-
-      if (raw.includes("homeverse_relinquishments")) {
-        // 'pending' is a SQL literal in VALUES clause, so values are:
-        // [0: id, 1: human_id, 2: identity_id, 3: replacement_identity_id, 4: initiated_at, 5: cooldown_expires_at, 6: audit_log]
-        const record = {
-          id: values[0],
-          human_id: values[1],
-          identity_id: values[2],
-          replacement_identity_id: values[3],
-          status: "pending",
-          initiated_at: values[4],
-          cooldown_expires_at: values[5],
-          audit_log: typeof values[6] === "string" ? JSON.parse(values[6]) : values[6],
-          cancelled_at: null,
-          completed_at: null,
-        };
-        relinquishments.push(record);
-        return [];
-      }
-
-      return [];
-    }
-
-    return [];
-  };
-
-  // Helper: wire the sql mock to route per-table queries properly
-  // We override per-test for targeted queries.
-  return { associations, relinquishments, sql };
-}
-
-// ── Better sql mock ───────────────────────────────────────────────────────────
-// The generic mock above is intentionally simplistic. For deterministic tests
-// we build a targeted sql function that understands the specific query shapes
-// emitted by homeverseRelinquishment.ts.
+// ── In-memory sql mock ─────────────────────────────────────────────────────────
+// Targeted sql function that understands the query shapes emitted by
+// homeverseRelinquishment.ts and enforces the partial unique index
+// human_singleton_homeverse_idx plus transactional execution.
 
 function makeSql(associations, relinquishments) {
-  return async (strings, ...values) => {
+  const cloneRows = (rows) => rows.map((row) => ({ ...row }));
+
+  const sql = async (strings, ...values) => {
     const full = strings.join("?");
     const raw = full;
 
@@ -268,7 +108,30 @@ function makeSql(associations, relinquishments) {
       const assoc = associations.find(
         (a) => a.human_id === humanId && a.identity_id === identityId && a.revoked_at == null
       );
-      if (assoc) assoc.is_homeverse = isHomeverseVal;
+      if (assoc) {
+        if (isHomeverseVal) {
+          const conflictingHomeverse = associations.find(
+            (other) =>
+              other.human_id === assoc.human_id &&
+              other.identity_id !== assoc.identity_id &&
+              other.is_homeverse === true &&
+              other.verification_status === "verified" &&
+              other.revoked_at == null
+          );
+          if (
+            conflictingHomeverse &&
+            assoc.verification_status === "verified" &&
+            assoc.revoked_at == null
+          ) {
+            const err = new Error(
+              'duplicate key value violates unique constraint "human_singleton_homeverse_idx"'
+            );
+            err.code = "23505";
+            throw err;
+          }
+        }
+        assoc.is_homeverse = isHomeverseVal;
+      }
       return [];
     }
 
@@ -336,6 +199,28 @@ function makeSql(associations, relinquishments) {
 
     return [];
   };
+
+  sql.transactionCalls = 0;
+  sql.transaction = async (queriesOrFn) => {
+    sql.transactionCalls += 1;
+    const assocSnap = cloneRows(associations);
+    const relSnap = cloneRows(relinquishments);
+    try {
+      if (typeof queriesOrFn === "function") {
+        return await queriesOrFn(sql);
+      }
+      if (Array.isArray(queriesOrFn)) {
+        return await Promise.all(queriesOrFn);
+      }
+      return [];
+    } catch (err) {
+      associations.splice(0, associations.length, ...assocSnap);
+      relinquishments.splice(0, relinquishments.length, ...relSnap);
+      throw err;
+    }
+  };
+
+  return sql;
 }
 
 // ── Fixture builder ───────────────────────────────────────────────────────────
@@ -795,6 +680,47 @@ await test("12. No fee logic anywhere in homeverseRelinquishment", async () => {
     /fee|payment|price|charge|billing|stripe|cost/i.test(k)
   );
   assert.deepEqual(feeRelated, [], `No fee-related exports: found ${JSON.stringify(feeRelated)}`);
+});
+
+// ── Test 13: Active makeSql enforces human_singleton_homeverse_idx & sql.transaction ──
+await test("13. Active makeSql enforces human_singleton_homeverse_idx (23505) and transactional cancellation", async () => {
+  const associations = [
+    makeAssoc({ human_id: "h13", identity_id: "id-13-old", is_homeverse: false }),
+    makeAssoc({ human_id: "h13", identity_id: "id-13-new", is_homeverse: true }),
+  ];
+  const relinquishments = [
+    {
+      id: "rl-13",
+      human_id: "h13",
+      identity_id: "id-13-old",
+      replacement_identity_id: "id-13-new",
+      status: "pending",
+      initiated_at: new Date().toISOString(),
+      cooldown_expires_at: new Date(Date.now() + 1e9).toISOString(),
+      audit_log: [],
+      cancelled_at: null,
+      completed_at: null,
+    },
+  ];
+  const sql = makeSql(associations, relinquishments);
+
+  // Attempting to flip old handle TRUE before clearing replacement violates 23505
+  await assert.rejects(
+    () => sql`
+      UPDATE human_youniverse_associations
+      SET is_homeverse = TRUE
+      WHERE human_id = ${"h13"}
+        AND identity_id = ${"id-13-old"}
+        AND revoked_at IS NULL
+    `,
+    (err) => err?.code === "23505" && /human_singleton_homeverse_idx/.test(err.message)
+  );
+
+  // Cancellation runs inside sql.transaction clearing FALSE before setting TRUE
+  await cancelHomeverseRelinquishment(sql, { humanId: "h13", relinquishmentId: "rl-13" });
+  assert.equal(sql.transactionCalls, 1, "cancelHomeverseRelinquishment must use sql.transaction");
+  assert.equal(associations.find((a) => a.identity_id === "id-13-old").is_homeverse, true);
+  assert.equal(associations.find((a) => a.identity_id === "id-13-new").is_homeverse, false);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

@@ -383,28 +383,21 @@ async function handleFoundingAngelCheckout(req: any, res: any, stripeSecret: str
     });
   }
 
-  const auth = deps?.authenticateRequest
-    ? await deps.authenticateRequest(req)
-    : await authenticateRequest(req, deps?.authDeps);
-
-  if (!auth.ok) {
-    const errorAuth = auth as { status: number; error: string; message: string };
-    return res.status(errorAuth.status).json({ status: errorAuth.error, message: errorAuth.message });
-  }
-
   const hasOriginHeader = Boolean(req?.headers?.origin ?? req?.headers?.Origin);
   const rawAuthHeader = req?.headers?.authorization ?? req?.headers?.Authorization;
   const hasBearerAuth =
     typeof rawAuthHeader === "string" &&
     rawAuthHeader.startsWith("Bearer ") &&
     rawAuthHeader.slice(7).trim().length > 0;
+  const cookieHeader = String(req?.headers?.cookie ?? req?.headers?.Cookie ?? "");
+  const hasSessionCookie = cookieHeader.includes("__youniverse_session=");
+  const normalizedHeaders =
+    !req?.headers?.origin && req?.headers?.Origin
+      ? { ...req.headers, origin: req.headers.Origin }
+      : req?.headers;
+  const csrfReq = normalizedHeaders === req?.headers ? req : { ...req, headers: normalizedHeaders };
 
-  if (hasOriginHeader || !hasBearerAuth) {
-    const normalizedHeaders =
-      !req?.headers?.origin && req?.headers?.Origin
-        ? { ...req.headers, origin: req.headers.Origin }
-        : req?.headers;
-    const csrfReq = normalizedHeaders === req?.headers ? req : { ...req, headers: normalizedHeaders };
+  if (hasOriginHeader || (hasSessionCookie && !hasBearerAuth)) {
     const csrf = enforceAntiCsrf(csrfReq, deps?.env ?? process.env, {
       allowSameOriginTenantSubdomain: true,
     });
@@ -417,7 +410,16 @@ async function handleFoundingAngelCheckout(req: any, res: any, stripeSecret: str
     }
   }
 
-  const originTenantHandle = extractTenantOriginHandle(req);
+  const auth = deps?.authenticateRequest
+    ? await deps.authenticateRequest(req)
+    : await authenticateRequest(req, deps?.authDeps);
+
+  if (!auth.ok) {
+    const errorAuth = auth as { status: number; error: string; message: string };
+    return res.status(errorAuth.status).json({ status: errorAuth.error, message: errorAuth.message });
+  }
+
+  const originTenantHandle = extractTenantOriginHandle(csrfReq);
   if (
     originTenantHandle &&
     (!auth.user?.handle || originTenantHandle !== String(auth.user.handle).toLowerCase())
@@ -431,7 +433,7 @@ async function handleFoundingAngelCheckout(req: any, res: any, stripeSecret: str
 
   let trustedOrigin: string;
   try {
-    trustedOrigin = resolveTrustedOrigin(req);
+    trustedOrigin = resolveTrustedOrigin(csrfReq, deps?.env ?? process.env);
   } catch (err: any) {
     console.error("[/api/stripe/founding-angels-checkout] Origin resolution rejected:", err.message);
     return res.status(400).json({ status: "invalid-origin", message: err.message || "Invalid origin." });
@@ -592,6 +594,7 @@ async function handleWebhook(req: any, res: any, stripeSecret: string, deps: any
   // Handle dispute events for Founding Angel orders
   if (
     event.type === "charge.dispute.created" ||
+    event.type === "charge.dispute.updated" ||
     event.type === "charge.dispute.closed" ||
     event.type === "charge.dispute.funds_reinstated" ||
     event.type === "charge.dispute.funds_withdrawn"

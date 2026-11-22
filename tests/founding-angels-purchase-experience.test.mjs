@@ -172,6 +172,11 @@ function createMockDb() {
         return { rows: [{ pg_advisory_xact_lock: null }] };
       }
 
+      // Platform setup readiness gate
+      if (q.includes("FROM public.founding_angels_platform_setup")) {
+        return { rows: [{ is_completed: true, completed_at: new Date().toISOString() }] };
+      }
+
       // Check active orders for identity
       if (q.includes("FROM public.founding_angel_orders") && q.includes("WHERE identity_id = $1") && q.includes("status IN ('creating_session', 'open')")) {
         const idId = params[0];
@@ -330,7 +335,7 @@ test("2. Unauthenticated purchase attempt fails closed", async () => {
     headers: {}, // No Authorization header
   });
 
-  await stripeHandler(req, res);
+  await stripeHandler(req, res, { salesEnabled: true });
   assert.strictEqual(res.statusCode, 401, "Unauthenticated request must return 401");
   assert.strictEqual(res.bodyData?.status, "unauthorized");
 });
@@ -372,7 +377,7 @@ test("3. Authenticated purchase invokes existing checkout endpoint and returns S
   const result = await createFoundingAngelCheckoutSession(
     "usr_test_verified_1",
     "https://itsyouonline.com/founding-angels",
-    { pool: mockPool, stripe: mockStripe }
+    { pool: mockPool, stripe: mockStripe, salesEnabled: true }
   );
 
   assert.ok(result.orderId, "Must return orderId");
@@ -400,7 +405,7 @@ test("4. Duplicate checkout submission is prevented when active order exists", a
       await createFoundingAngelCheckoutSession(
         "usr_test_verified_1",
         "https://itsyouonline.com/founding-angels",
-        { pool: mockPool, stripe: mockStripe }
+        { pool: mockPool, stripe: mockStripe, salesEnabled: true }
       );
     },
     /An active Founding Angel checkout session already exists/
@@ -424,7 +429,7 @@ test("5. Checkout capacity cap rejects with typed error when capacity is 500", a
       await createFoundingAngelCheckoutSession(
         "usr_test_verified_1",
         "https://itsyouonline.com/founding-angels",
-        { pool: mockPool, stripe: mockStripe }
+        { pool: mockPool, stripe: mockStripe, salesEnabled: true }
       );
     },
     (err) => {
@@ -710,7 +715,7 @@ test("14. DEF-02: Sold-out capacity in dispatcher maps to HTTP 409", async () =>
     },
   });
 
-  await stripeHandler(req, res, { authenticateRequest: mockAuth, pool: mockPool });
+  await stripeHandler(req, res, { authenticateRequest: mockAuth, pool: mockPool, salesEnabled: true });
   assert.strictEqual(res.statusCode, 409, "Must return HTTP 409 when capacity is full");
   assert.strictEqual(res.bodyData?.status, "sold-out");
   assert.match(res.bodyData?.message, /All 500 Founding Angel memberships have been claimed/i);
@@ -748,7 +753,7 @@ test("15. DEF-02: Unrelated errors return HTTP 500 and are not mislabeled as cap
     },
   };
 
-  await stripeHandler(failingReqRes.req, failingReqRes.res, { authenticateRequest: mockAuth, pool: failingPool });
+  await stripeHandler(failingReqRes.req, failingReqRes.res, { authenticateRequest: mockAuth, pool: failingPool, salesEnabled: true });
 
   assert.strictEqual(failingReqRes.res.statusCode, 500, "Unrelated DB failure must return HTTP 500");
   assert.strictEqual(failingReqRes.res.bodyData?.status, "error");
@@ -762,4 +767,19 @@ test("16. DEF-04: Polling timeout states in FoundingAngelsSuccess.tsx provide re
   assert.match(successContent, /Fulfillment In Progress/i, "Must show clear in-progress heading on timeout");
   assert.match(successContent, /Check Again/i, "Must provide manual check again button on timeout");
   assert.match(successContent, /clearTimer\(\)/, "Must properly clear timeout timers");
+});
+
+test("17. R4 HttpOnly cookie compatibility in FoundingAngelsOffer and FoundingAngelsSuccess", () => {
+  const offerContent = fs.readFileSync("components/founding-angels/FoundingAngelsOffer.tsx", "utf8");
+  const successContent = fs.readFileSync("components/founding-angels/FoundingAngelsSuccess.tsx", "utf8");
+
+  // FoundingAngelsOffer must send credentials: "include" on checkout & context checks
+  assert.match(offerContent, /fetch\("\/api\/stripe\/founding-angels-checkout",[\s\S]*credentials:\s*"include"/);
+  assert.match(offerContent, /setIsAuthenticated\(true\)/, "Must track authenticated state for cookie sessions without Bearer token");
+  assert.doesNotMatch(offerContent, /if\s*\(!sessionToken\)\s*\{\s*setIsLoginModalOpen\(true\)/);
+
+  // FoundingAngelsSuccess must send credentials: "include" and query status even without localStorage token
+  assert.match(successContent, /fetch\([\s\S]*\/api\/stripe\/founding-angels-status[\s\S]*credentials:\s*"include"/);
+  assert.match(successContent, /if\s*\(sessionId\)\s*\{\s*checkStatus\(\)/);
+  assert.doesNotMatch(successContent, /if\s*\(!token\)\s*\{\s*setStatus\("unauthenticated"\)/);
 });

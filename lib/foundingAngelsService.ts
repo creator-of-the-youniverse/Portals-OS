@@ -131,11 +131,11 @@ export class FoundingAngelSalesPausedError extends Error {
 export function isFoundingAngelsSalesEnabled(env: Record<string, string | undefined> = process.env): boolean {
   const raw = env.FOUNDING_ANGELS_SALES_ENABLED;
   if (raw === undefined || raw === null) {
-    return true; // Default enabled
+    return false; // Fail closed unless explicitly enabled
   }
   const val = raw.trim().toLowerCase();
   if (val === "") {
-    return true; // Default enabled if empty/whitespace
+    return false; // Fail closed on empty/whitespace
   }
   if (val === "true") {
     return true;
@@ -153,8 +153,8 @@ export function isFoundingAngelsSalesEnabled(env: Record<string, string | undefi
  * 1. createFoundingAngelCheckoutSession
  *
  * Creates a $200 USD Founding Angel checkout session for the authenticated identity.
- * Strictly checks capacity under advisory lock 500200 in Tx 1, calls Stripe outside DB locks,
- * and updates order to 'open' in Tx 2.
+ * Strictly checks setup readiness and capacity under advisory lock 500200 in Tx 1,
+ * calls Stripe outside DB locks, and updates order to 'open' in Tx 2.
  */
 export async function createFoundingAngelCheckoutSession(
   identityId: string,
@@ -176,10 +176,22 @@ export async function createFoundingAngelCheckoutSession(
 
   const stripe = deps.stripe ?? new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-08-26.dahlia" });
 
-  // Phase 1: DB Tx 1 (Short) - Capacity check & intent order creation under advisory lock
+  // Phase 1: DB Tx 1 (Short) - Setup readiness, capacity check & intent order creation under advisory lock
   const order = await withTransaction(deps, async (client) => {
     // Acquire global capacity advisory lock
     await client.query("SELECT pg_advisory_xact_lock(500200)");
+
+    // Fail closed unless Founding Angels platform setup has been completed
+    const setupRes = await client.query(
+      `SELECT is_completed, completed_at
+       FROM public.founding_angels_platform_setup
+       WHERE setup_key = 'founding_angels'
+       LIMIT 1`
+    );
+    const setupRow = setupRes.rows?.[0];
+    if (!setupRow || setupRow.is_completed !== true || !setupRow.completed_at) {
+      throw new FoundingAngelSalesPausedError("Founding Angels platform setup is not yet completed.");
+    }
 
     // Check single active checkout partial unique index prerequisite
     const activeOrdersRes = await client.query(

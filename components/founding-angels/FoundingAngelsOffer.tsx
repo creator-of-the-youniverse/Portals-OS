@@ -20,44 +20,65 @@ interface FoundingAngelsOfferProps {
 
 export const FoundingAngelsOffer: React.FC<FoundingAngelsOfferProps> = ({ onNavigate }) => {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [handle, setHandle] = useState<string | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  // Check authentication on mount
+  const resolveCachedHandle = (): string | null => {
+    const direct = localStorage.getItem("active_youniverse_handle");
+    if (direct && direct.trim()) return direct.trim();
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("youniverse_os_active_")) {
+        return key.replace("youniverse_os_active_", "");
+      }
+    }
+    return null;
+  };
+
+  // Check authentication on mount (supports both HttpOnly session cookie and legacy Bearer token)
   useEffect(() => {
     const token =
       localStorage.getItem("youniverse_session_token") ||
       localStorage.getItem("weaver_jwt");
+    const cachedHandle = resolveCachedHandle();
+    if (cachedHandle) setHandle(cachedHandle);
+
     if (token) {
       setSessionToken(token);
-      // Attempt to retrieve cached handle if available
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith("youniverse_os_active_")) {
-          setHandle(key.replace("youniverse_os_active_", ""));
-          break;
-        }
-      }
+      setIsAuthenticated(true);
+      return;
+    }
+
+    if (cachedHandle) {
+      fetch(`/api/youniverse/${encodeURIComponent(cachedHandle)}/context`, {
+        credentials: "include",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.success === true && data?.isOwner === true) {
+            setIsAuthenticated(true);
+          }
+        })
+        .catch(() => {});
     }
   }, []);
 
   const handleLoginSuccess = (token: string) => {
-    setSessionToken(token);
+    if (token) {
+      setSessionToken(token);
+    }
+    setIsAuthenticated(true);
     setIsLoginModalOpen(false);
     setCheckoutError(null);
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith("youniverse_os_active_")) {
-        setHandle(key.replace("youniverse_os_active_", ""));
-        break;
-      }
-    }
+    const cachedHandle = resolveCachedHandle();
+    if (cachedHandle) setHandle(cachedHandle);
   };
 
   const handleInitiateCheckout = async () => {
-    if (!sessionToken) {
+    if (!isAuthenticated && !sessionToken) {
       setIsLoginModalOpen(true);
       return;
     }
@@ -71,12 +92,18 @@ export const FoundingAngelsOffer: React.FC<FoundingAngelsOfferProps> = ({ onNavi
     const returnUrl = `${origin}/founding-angels`;
 
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Portals-Request": "1",
+      };
+      if (sessionToken) {
+        headers.Authorization = `Bearer ${sessionToken}`;
+      }
+
       const res = await fetch("/api/stripe/founding-angels-checkout", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionToken}`,
-        },
+        credentials: "include",
+        headers,
         body: JSON.stringify({ returnUrl }),
       });
 
@@ -92,10 +119,15 @@ export const FoundingAngelsOffer: React.FC<FoundingAngelsOfferProps> = ({ onNavi
         setCheckoutError("All 500 Founding Angel memberships have been claimed.");
       } else if (res.status === 401) {
         setSessionToken(null);
+        setIsAuthenticated(false);
         setCheckoutError("Your session has expired. Please sign in again to continue.");
         setIsLoginModalOpen(true);
       } else if (res.status === 403) {
-        setCheckoutError("Email verification is required before joining Founding Angels. Please check your verification link.");
+        setCheckoutError(
+          data.message || "Email verification is required before joining Founding Angels. Please check your verification link."
+        );
+      } else if (res.status === 503) {
+        setCheckoutError(data.message || "Founding Angels enrollment is temporarily paused.");
       } else {
         setCheckoutError(data.message || "Failed to initiate checkout. Please try again.");
       }
@@ -291,7 +323,7 @@ export const FoundingAngelsOffer: React.FC<FoundingAngelsOfferProps> = ({ onNavi
                           <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
                           <span>Securing Slot...</span>
                         </>
-                      ) : sessionToken ? (
+                      ) : (isAuthenticated || sessionToken) ? (
                         <>
                           <span>Claim Founding Membership</span>
                           <ArrowRight className="w-4 h-4 shrink-0" />
@@ -307,7 +339,7 @@ export const FoundingAngelsOffer: React.FC<FoundingAngelsOfferProps> = ({ onNavi
                     {/* Identity status & Stripe verification row */}
                     <div className="mt-3.5 pt-3 border-t border-white/[0.08] flex flex-col items-center gap-1.5">
                       <p className="text-[11px] font-mono text-white/65 flex items-center justify-center gap-1.5">
-                        {sessionToken ? (
+                        {(isAuthenticated || sessionToken) ? (
                           <>
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                             {handle ? (

@@ -778,3 +778,89 @@ test("BB-10: api/gemini.ts enforces anti-CSRF, cross-tenant Origin check, and no
   assert.equal(trustedRes._headers["access-control-allow-origin"], "https://www.itsyouonline.com");
   assert.notEqual(trustedRes._headers["access-control-allow-origin"], "*");
 });
+
+test("BB-11: api/gemini.ts preserves 500 on DB errors, 404 on missing tenant, and checks is_live + email_verified_at on gateway origin", async () => {
+  const { default: geminiHandler } = await import("../api/gemini.ts");
+  const prodEnv = { VERCEL_ENV: "production", NODE_ENV: "production" };
+  const validBody = { model: "gemini-1.5-flash", contents: [{ role: "user", parts: [{ text: "hello" }] }] };
+
+  // 1. DB error during tenant-origin check returns 500 session_store_unavailable (never 403 csrf_rejected)
+  const dbErrRes = makeRes();
+  await geminiHandler(
+    {
+      method: "POST",
+      headers: { host: "alice.itsyouonline.com", origin: "https://alice.itsyouonline.com", cookie: "__youniverse_session=valid-sess" },
+      body: validBody,
+    },
+    dbErrRes,
+    {
+      env: prodEnv,
+      sql: async () => {
+        throw new Error("DB connection drop");
+      },
+      validateSession: async () => ({ ok: true, identityId: "id-alice", sessionId: "sess-a", humanId: null }),
+    }
+  );
+  assert.equal(dbErrRes._status, 500);
+  assert.equal(dbErrRes._body.error, "session_store_unavailable");
+
+  // 2. Nonexistent tenant origin returns 404
+  const notFoundRes = makeRes();
+  await geminiHandler(
+    {
+      method: "POST",
+      headers: { host: "ghost.itsyouonline.com", origin: "https://ghost.itsyouonline.com", cookie: "__youniverse_session=valid-sess" },
+      body: validBody,
+    },
+    notFoundRes,
+    {
+      env: prodEnv,
+      sql: async (strings, ...values) => {
+        const q = strings.join("?");
+        if (q.includes("FROM youniverse_identities") && q.includes("identity_id =")) {
+          return [{ identity_id: "id-alice", username: "alice", email: "a@e.com", plan: "free", is_live: true, email_verified_at: "2026-11-21T00:00:00Z" }];
+        }
+        return [];
+      },
+      validateSession: async () => ({ ok: true, identityId: "id-alice", sessionId: "sess-a", humanId: null }),
+    }
+  );
+  assert.equal(notFoundRes._status, 404);
+  assert.equal(notFoundRes._body.error, "youniverse_not_found");
+
+  // 3. Gateway-origin session with is_live=false fails closed 403 youniverse_suspended
+  const suspendedRes = makeRes();
+  await geminiHandler(
+    {
+      method: "POST",
+      headers: { host: "www.itsyouonline.com", origin: "https://www.itsyouonline.com", cookie: "__youniverse_session=valid-sess" },
+      body: validBody,
+    },
+    suspendedRes,
+    {
+      env: prodEnv,
+      sql: async () => [{ identity_id: "id-alice", username: "alice", email: "a@e.com", plan: "free", is_live: false, email_verified_at: "2026-11-21T00:00:00Z" }],
+      validateSession: async () => ({ ok: true, identityId: "id-alice", sessionId: "sess-a", humanId: null }),
+    }
+  );
+  assert.equal(suspendedRes._status, 403);
+  assert.equal(suspendedRes._body.error, "youniverse_suspended");
+
+  // 4. Gateway-origin session with unverified email fails closed 403 email_not_verified
+  const unverifiedRes = makeRes();
+  await geminiHandler(
+    {
+      method: "POST",
+      headers: { host: "www.itsyouonline.com", origin: "https://www.itsyouonline.com", cookie: "__youniverse_session=valid-sess" },
+      body: validBody,
+    },
+    unverifiedRes,
+    {
+      env: prodEnv,
+      sql: async () => [{ identity_id: "id-alice", username: "alice", email: "a@e.com", plan: "free", is_live: true, email_verified_at: null }],
+      validateSession: async () => ({ ok: true, identityId: "id-alice", sessionId: "sess-a", humanId: null }),
+    }
+  );
+  assert.equal(unverifiedRes._status, 403);
+  assert.equal(unverifiedRes._body.error, "email_not_verified");
+});

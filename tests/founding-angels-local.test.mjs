@@ -440,6 +440,11 @@ function createMockDb() {
         return { rows: [] };
       }
 
+      // Platform setup readiness gate
+      if (q.includes("FROM public.founding_angels_platform_setup")) {
+        return { rows: [{ is_completed: true, completed_at: new Date().toISOString() }] };
+      }
+
       // Check active orders for identity
       if (q.includes("FROM public.founding_angel_orders") && q.includes("identity_id = $1") && q.includes("status IN ('creating_session', 'open')")) {
         const found = Array.from(orders.values()).filter((o) => o.identity_id === params[0] && ["creating_session", "open"].includes(o.status));
@@ -671,7 +676,7 @@ test("AH01: Authenticated identity derivation isolation", async () => {
   const result = await createFoundingAngelCheckoutSession(
     authenticatedIdentityId,
     "https://example.com/return",
-    { pool: db.pool, stripe: mockStripe }
+    { pool: db.pool, stripe: mockStripe, salesEnabled: true }
   );
 
   assert.ok(result.orderId);
@@ -700,7 +705,7 @@ test("AH02: Unauthenticated checkout request fails closed", async () => {
   };
 
   process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "mock-secret-for-tests";
-  await stripeHandler(req, res);
+  await stripeHandler(req, res, { salesEnabled: true });
   assert.equal(statusCode, 401);
   assert.equal(bodyData.status, "unauthorized");
 });
@@ -713,7 +718,7 @@ test("AH03: Capacity preflight rejects when sold out", async () => {
   }
 
   await assert.rejects(
-    createFoundingAngelCheckoutSession("user_overflow", "https://example.com", { pool: db.pool }),
+    createFoundingAngelCheckoutSession("user_overflow", "https://example.com", { pool: db.pool, salesEnabled: true }),
     /capacity is full/i
   );
 });
@@ -731,6 +736,7 @@ test("AH04: Checkout session completed fulfills order and assigns member number"
   const { orderId } = await createFoundingAngelCheckoutSession("user_1", "https://example.com", {
     pool: db.pool,
     stripe: mockStripe,
+    salesEnabled: true,
   });
 
   const session = {

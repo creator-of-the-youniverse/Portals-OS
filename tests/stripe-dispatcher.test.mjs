@@ -452,7 +452,86 @@ async function runTests() {
     });
     assert.strictEqual(crossTenantRes.statusCode, 403);
     assert.strictEqual(crossTenantRes.bodyData?.error, "csrf_rejected");
-    console.log("✔ Test 10: founding-angels-checkout rejects hostile and cross-tenant CSRF Origins");
+
+    // Pre-auth cookie CSRF check without calling authenticateRequest
+    let authCalledOnCookieCsrf = false;
+    const { req: cookieOnlyReq, res: cookieOnlyRes } = createMockReqRes({
+      method: "POST",
+      url: "/api/stripe/founding-angels-checkout",
+      query: { action: "founding-angels-checkout" },
+      headers: { host: "itsyouonline.com", cookie: "__youniverse_session=tok" },
+    });
+    await handler(cookieOnlyReq, cookieOnlyRes, {
+      authenticateRequest: async () => {
+        authCalledOnCookieCsrf = true;
+        return mockAuthAlice();
+      },
+      salesEnabled: true,
+      env: { VERCEL_ENV: "production", NODE_ENV: "production" },
+    });
+    assert.strictEqual(cookieOnlyRes.statusCode, 403);
+    assert.strictEqual(cookieOnlyRes.bodyData?.error, "csrf_rejected");
+    assert.strictEqual(authCalledOnCookieCsrf, false, "Pre-auth CSRF must reject before touching DB/auth");
+
+    // resolveTrustedOrigin forwards deps.env
+    const { req: badEnvReq, res: badEnvRes } = createMockReqRes({
+      method: "POST",
+      url: "/api/stripe/founding-angels-checkout",
+      query: { action: "founding-angels-checkout" },
+      headers: { host: "itsyouonline.com", origin: "https://itsyouonline.com", cookie: "__youniverse_session=tok" },
+    });
+    await handler(badEnvReq, badEnvRes, {
+      authenticateRequest: mockAuthAlice,
+      salesEnabled: true,
+      env: { VERCEL_ENV: "production", NODE_ENV: "production", APP_URL: "https://evil.example.com" },
+    });
+    assert.strictEqual(badEnvRes.statusCode, 400);
+    assert.strictEqual(badEnvRes.bodyData?.status, "invalid-origin");
+
+    let capturedSuccessUrl = "";
+    const { req: wwwEnvReq, res: wwwEnvRes } = createMockReqRes({
+      method: "POST",
+      url: "/api/stripe/founding-angels-checkout",
+      query: { action: "founding-angels-checkout" },
+      headers: { host: "www.itsyouonline.com", origin: "https://www.itsyouonline.com", cookie: "__youniverse_session=tok" },
+    });
+    await handler(wwwEnvReq, wwwEnvRes, {
+      authenticateRequest: mockAuthAlice,
+      salesEnabled: true,
+      env: { VERCEL_ENV: "production", NODE_ENV: "production", APP_URL: "https://www.itsyouonline.com" },
+      stripe: {
+        checkout: {
+          sessions: {
+            create: async (params) => {
+              capturedSuccessUrl = params.success_url;
+              return { id: "cs_www_1", url: "https://checkout.stripe.com/pay/cs_www_1" };
+            },
+          },
+        },
+      },
+      pool: {
+        connect: async () => ({
+          query: async (sql) => {
+            if (sql.includes("FROM public.founding_angels_platform_setup")) {
+              return { rows: [{ is_completed: true, completed_at: new Date().toISOString() }] };
+            }
+            if (sql.includes("public.founding_angel_memberships")) return { rows: [{ cnt: 0 }] };
+            if (sql.includes("checkout_expires_at > NOW()")) return { rows: [{ cnt: 0 }] };
+            if (sql.includes("INSERT INTO public.founding_angel_orders")) {
+              return { rows: [{ id: "ord_www_1", stripe_idempotency_key: "idem_www" }] };
+            }
+            return { rows: [] };
+          },
+          release: () => {},
+        }),
+      },
+    });
+    assert.strictEqual(wwwEnvRes.statusCode, 200);
+    assert.strictEqual(
+      capturedSuccessUrl,
+      "https://www.itsyouonline.com/founding-angels/success?session_id={CHECKOUT_SESSION_ID}"
+    );
+    console.log("✔ Test 10: founding-angels-checkout enforces pre-auth CSRF, cross-tenant checks, and forwards deps.env to resolveTrustedOrigin");
   }
 
   console.log("\nAll targeted tests passed successfully!");
