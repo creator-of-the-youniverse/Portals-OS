@@ -26,6 +26,9 @@ export default defineConfig(({ mode }) => {
         // Define global constants to reduce runtime checks
         global: 'globalThis',
       },
+      esbuild: {
+        jsxDev: mode !== 'production',
+      },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

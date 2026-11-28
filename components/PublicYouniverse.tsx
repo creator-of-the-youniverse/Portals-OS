@@ -13,6 +13,8 @@ interface PublicWidget {
   title: string;
   code?: string;
   dependencies?: string[];
+  entryFile?: string;
+  files?: Record<string, { path: string; content: string; language?: string }>;
   publishedAt?: string | null;
   content?: {
     type: string;
@@ -22,11 +24,16 @@ interface PublicWidget {
   updatedAt: string;
 }
 
+interface PublicErrorState {
+  kind: 'unverified' | 'not_found' | 'network';
+  message: string;
+}
+
 export default function PublicYouniverse({ handle, onOpenLoginModal }: PublicYouniverseProps) {
   const [profile, setProfile] = useState<any>(null);
   const [widgets, setWidgets] = useState<PublicWidget[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<PublicErrorState | null>(null);
   const [isRegistryOpen, setIsRegistryOpen] = useState(false);
 
   const genesisBadge = Array.isArray(profile?.badges)
@@ -37,17 +44,39 @@ export default function PublicYouniverse({ handle, onOpenLoginModal }: PublicYou
     async function fetchPublicData() {
       try {
         const res = await fetch(`/api/youniverse/${handle}/public`);
-        const data = await res.json();
-        
-        if (data.success) {
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok && data?.success === true && data?.youniverse) {
           setProfile(data.youniverse);
-          setWidgets(data.publicWidgets);
+          setWidgets(Array.isArray(data.publicWidgets) ? data.publicWidgets : []);
+          setErrorState(null);
+        } else if (
+          res.status === 403 ||
+          data?.error === 'youniverse_unverified' ||
+          data?.status === 'unverified'
+        ) {
+          setProfile(null);
+          setWidgets([]);
+          setErrorState({
+            kind: 'unverified',
+            message: 'This Youniverse is pending identity verification and is not publicly available yet.',
+          });
         } else {
-          setError(data.error || "Youniverse not found.");
+          setProfile(null);
+          setWidgets([]);
+          setErrorState({
+            kind: 'not_found',
+            message: 'This Youniverse could not be found or is currently unavailable.',
+          });
         }
       } catch (err) {
         console.error("Failed to load public profile", err);
-        setError("Network error connecting to sovereign node.");
+        setProfile(null);
+        setWidgets([]);
+        setErrorState({
+          kind: 'network',
+          message: 'Network error connecting to sovereign node.',
+        });
       } finally {
         setLoading(false);
       }
@@ -66,7 +95,38 @@ export default function PublicYouniverse({ handle, onOpenLoginModal }: PublicYou
     );
   }
 
-  if (error) {
+  if (errorState?.kind === 'unverified') {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-200 flex flex-col items-center justify-center p-6 font-mono text-center">
+        <div className="max-w-md bg-zinc-900 border border-amber-500/30 rounded-xl p-8 shadow-xl">
+          <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-5 h-5" />
+          </div>
+          <h2 className="text-lg font-semibold text-white mb-2">Verification Pending</h2>
+          <p className="text-zinc-400 text-xs mb-6 leading-relaxed">
+            @{handle}.itsyouonline.com has not completed identity verification and is not publicly available yet.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <a
+              href="https://itsyouonline.com"
+              className="inline-flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs px-4 py-2 rounded-md transition-colors"
+            >
+              Return to Gateway <ArrowUpRight className="w-3.5 h-3.5" />
+            </a>
+            <button
+              onClick={onOpenLoginModal}
+              className="inline-flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs px-4 py-2 rounded-md transition-colors"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Owner Access
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorState || !profile) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200 flex flex-col items-center justify-center p-6 font-mono text-center">
         <div className="max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-8 shadow-xl">
@@ -74,7 +134,9 @@ export default function PublicYouniverse({ handle, onOpenLoginModal }: PublicYou
             !
           </div>
           <h2 className="text-lg font-semibold text-white mb-2">Node Unreachable</h2>
-          <p className="text-zinc-400 text-xs mb-6 leading-relaxed">{error}</p>
+          <p className="text-zinc-400 text-xs mb-6 leading-relaxed">
+            {errorState?.message || 'This Youniverse is currently unavailable.'}
+          </p>
           <a
             href="https://itsyouonline.com"
             className="inline-flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs px-4 py-2 rounded-md transition-colors"
@@ -184,7 +246,12 @@ export default function PublicYouniverse({ handle, onOpenLoginModal }: PublicYou
                         {widget.content?.type || 'REACT_WIDGET'} • ID: {widget.id.slice(0, 8)}
                       </p>
                       <div className="h-56 w-full rounded-lg overflow-hidden border border-zinc-800/90 bg-zinc-950/90">
-                        <WeaverSandbox code={widgetCode} componentName={widget.title} />
+                        <WeaverSandbox
+                          code={widgetCode}
+                          componentName={widget.title}
+                          files={widget.files ?? null}
+                          entryFile={widget.entryFile}
+                        />
                       </div>
                     </div>
                     <div className="mt-4 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400 font-mono">

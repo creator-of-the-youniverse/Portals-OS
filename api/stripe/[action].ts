@@ -412,7 +412,11 @@ async function handleFoundingAngelCheckout(req: any, res: any, stripeSecret: str
 
   const auth = deps?.authenticateRequest
     ? await deps.authenticateRequest(req)
-    : await authenticateRequest(req, deps?.authDeps);
+    : await authenticateRequest(req, {
+        databaseUrl: deps?.databaseUrl,
+        env: deps?.env,
+        ...deps?.authDeps,
+      });
 
   if (!auth.ok) {
     const errorAuth = auth as { status: number; error: string; message: string };
@@ -512,15 +516,16 @@ async function handleWebhook(req: any, res: any, stripeSecret: string, deps: any
     return res.status(405).json({ status: "method-not-allowed" });
   }
 
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  const databaseUrl = process.env.DATABASE_URL;
+  const env = deps?.env ?? process.env;
+  const webhookSecret = env.STRIPE_WEBHOOK_SECRET ?? process.env.STRIPE_WEBHOOK_SECRET;
+  const databaseUrl = deps.databaseUrl ?? env.DATABASE_URL;
 
-  if (!webhookSecret || !databaseUrl) {
+  if (!webhookSecret || (!databaseUrl && !deps.sql && !deps.pool)) {
     console.error("[webhook] Missing env vars (STRIPE_WEBHOOK_SECRET or DATABASE_URL)");
     return res.status(500).json({ status: "configuration-error" });
   }
   if (!deps.sql && !deps.pool) {
-    assertSafeDatabaseTarget(databaseUrl, deps?.env ?? process.env);
+    assertSafeDatabaseTarget(databaseUrl, env);
   }
 
   const stripe = deps.stripe ?? new Stripe(stripeSecret, { apiVersion: "2026-08-26.dahlia" });
@@ -558,7 +563,13 @@ async function handleWebhook(req: any, res: any, stripeSecret: string, deps: any
       return res.status(400).json({ status: "missing-handle" });
     }
 
-    const sql = neon(databaseUrl);
+    if (!deps.sql) {
+      if (!databaseUrl) {
+        return res.status(500).json({ status: "configuration-error" });
+      }
+      assertSafeDatabaseTarget(databaseUrl, env);
+    }
+    const sql = deps.sql ?? neon(databaseUrl);
 
     try {
       const existing = await sql`
@@ -702,7 +713,11 @@ async function handleFoundingAngelStatus(req: any, res: any, deps: any = {}) {
 
   const auth = deps?.authenticateRequest
     ? await deps.authenticateRequest(req)
-    : await authenticateRequest(req, deps?.authDeps);
+    : await authenticateRequest(req, {
+        databaseUrl: deps?.databaseUrl,
+        env: deps?.env,
+        ...deps?.authDeps,
+      });
 
   if (!auth.ok) {
     const errorAuth = auth as { status: number; error: string; message: string };

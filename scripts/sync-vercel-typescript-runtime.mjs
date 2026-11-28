@@ -28,8 +28,12 @@ import { pathToFileURL } from "node:url";
 const REPO_ROOT = process.cwd();
 const OUTPUT_DIR = path.join(REPO_ROOT, ".vercel", "output");
 const FUNCTIONS_DIR = path.join(OUTPUT_DIR, "functions");
+const STATIC_DIR = path.join(OUTPUT_DIR, "static");
 
 const MAX_VERCEL_HOBBY_FUNCTIONS = 12;
+
+// Actively referenced static assets that must survive Vercel hardlink/sync into .vercel/output/static
+const REQUIRED_STATIC_ASSETS = ["assets/images/you.png"];
 
 // Critical handlers that require TypeScript runtime packaging (12 consolidated functions <= Hobby cap)
 const REQUIRED_HANDLERS = [
@@ -82,6 +86,43 @@ function findFuncDirectories(dir, list = []) {
   return list;
 }
 
+function syncRequiredStaticAssets() {
+  if (!fs.existsSync(STATIC_DIR)) {
+    fail(`.vercel/output/static directory not found at ${STATIC_DIR}.`);
+  }
+
+  for (const relAsset of REQUIRED_STATIC_ASSETS) {
+    const srcPath = path.join(REPO_ROOT, "public", relAsset);
+    const destPath = path.join(STATIC_DIR, relAsset);
+
+    if (!fs.existsSync(srcPath)) {
+      fail(`Required static asset source missing: ${srcPath}`);
+    }
+
+    const srcBytes = fs.readFileSync(srcPath);
+    let needsWrite = true;
+    if (fs.existsSync(destPath)) {
+      const existingBytes = fs.readFileSync(destPath);
+      if (srcBytes.equals(existingBytes)) {
+        needsWrite = false;
+      }
+    }
+
+    if (needsWrite) {
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.writeFileSync(destPath, srcBytes);
+    }
+
+    if (!fs.existsSync(destPath) || !srcBytes.equals(fs.readFileSync(destPath))) {
+      fail(`Static asset verification failed after sync: ${relAsset}`);
+    }
+
+    console.log(
+      `[sync-vercel-ts-runtime] Verified required static asset: ${relAsset} (${needsWrite ? "copied" : "present"}, ${srcBytes.length} bytes)`
+    );
+  }
+}
+
 async function main() {
   console.log("[sync-vercel-ts-runtime] Starting TypeScript runtime packaging sync...");
 
@@ -91,6 +132,8 @@ async function main() {
   if (!fs.existsSync(FUNCTIONS_DIR)) {
     fail(`.vercel/output/functions directory not found at ${FUNCTIONS_DIR}.`);
   }
+
+  syncRequiredStaticAssets();
 
   // 1. Verify required function bundles exist
   for (const relFunc of REQUIRED_HANDLERS) {

@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import test from "node:test";
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
@@ -88,7 +88,7 @@ function setup({ method = "GET", handle, rows = [], error = null } = {}) {
   };
 }
 
-test("GET returns a live public profile and parameterizes the handle", async () => {
+test("GET returns a live verified public profile and parameterizes the handle", async () => {
   const response = setup({
     handle: "@CREATOR-OF-THE-YOUNIVERSE",
     rows: [{
@@ -98,6 +98,7 @@ test("GET returns a live public profile and parameterizes the handle", async () 
       identity_type: "person",
       plan: "free",
       is_live: true,
+      email_verified_at: "2026-11-22T00:00:00.000Z",
     }],
   });
 
@@ -214,6 +215,7 @@ test("missing plan defaults to free", async () => {
       identity_type: "person",
       plan: null,
       is_live: true,
+      email_verified_at: "2026-11-22T00:00:00.000Z",
     }],
   });
 
@@ -221,4 +223,41 @@ test("missing plan defaults to free", async () => {
 
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.youniverse.plan, "free");
+});
+
+test("unverified live profile fails closed with 403 youniverse_unverified and no PII", async (t) => {
+  for (const [label, emailVerifiedAt] of [
+    ["null", null],
+    ["undefined", undefined],
+    ["empty string", "   "],
+    ["invalid date", "not-a-timestamp"],
+  ]) {
+    await t.test(label, async () => {
+      const response = setup({
+        handle: "kevin",
+        rows: [{
+          identity_id: "id-kevin-1",
+          username: "kevin",
+          display_name: "Kevin",
+          subdomain: "kevin",
+          identity_type: "person",
+          email: "kevin@example.com",
+          plan: "free",
+          is_live: true,
+          ...(emailVerifiedAt === undefined ? {} : { email_verified_at: emailVerifiedAt }),
+        }],
+      });
+
+      await handler(response.req, response.res);
+
+      assert.equal(response.statusCode, 403);
+      assert.equal(response.body.success, false);
+      assert.equal(response.body.error, "youniverse_unverified");
+      assert.equal(response.body.status, "unverified");
+      assert.equal(response.body.youniverse, undefined);
+      assert.equal(response.headers["Cache-Control"], "no-store");
+      assert.equal(JSON.stringify(response.body).includes("kevin@example.com"), false);
+      assert.equal(globalThis.__publicProfileMock.calls, 1);
+    });
+  }
 });

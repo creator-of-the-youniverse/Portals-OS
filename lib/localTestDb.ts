@@ -28,6 +28,8 @@ export interface LocalDbTables {
   email_verification_tokens: any[];
   identity_entitlements: any[];
   not_notes: any[];
+  books_os_archive_entries: any[];
+  collection_point_submissions: any[];
 }
 
 export interface IsolatedTestDatabase {
@@ -74,6 +76,8 @@ export function createIsolatedTestDb(): IsolatedTestDatabase {
     email_verification_tokens: [],
     identity_entitlements: [],
     not_notes: [],
+    books_os_archive_entries: [],
+    collection_point_submissions: [],
   };
 
   const sql: any = function (strings: TemplateStringsArray | string[], ...values: any[]) {
@@ -315,6 +319,186 @@ export function createIsolatedTestDb(): IsolatedTestDatabase {
         row.updatedAt = new Date();
       }
       return Promise.resolve([]);
+    }
+
+    // ── 8b-2. Books OS archive entries persistence ──────────────────────────
+    if (query.includes("INSERT INTO books_os_archive_entries")) {
+      const [
+        id,
+        youniverse_id,
+        source_artifact_id,
+        entry_type,
+        tower_id,
+        shelf_id,
+        book_id,
+        page_id,
+        title,
+        summary,
+        body_markdown,
+        payloadJsonRaw,
+        version_hash,
+      ] = values;
+      const payload_json =
+        typeof payloadJsonRaw === "string" ? JSON.parse(payloadJsonRaw) : payloadJsonRaw ?? {};
+      const now = new Date();
+      tables.books_os_archive_entries.push({
+        id,
+        youniverse_id,
+        source_artifact_id: source_artifact_id ?? null,
+        entry_type,
+        tower_id,
+        shelf_id,
+        book_id,
+        page_id: page_id ?? null,
+        title,
+        summary: summary ?? null,
+        body_markdown: body_markdown ?? "",
+        payload_json,
+        version_hash,
+        webhook_sync_status: "skipped",
+        webhook_synced_at: null,
+        created_at: now,
+        updated_at: now,
+      });
+      return Promise.resolve([]);
+    }
+
+    if (query.includes("FROM books_os_archive_entries")) {
+      if (
+        query.includes("WHERE youniverse_id = ?") &&
+        query.includes("AND source_artifact_id = ?") &&
+        query.includes("AND version_hash = ?")
+      ) {
+        const [youniverse_id, source_artifact_id, version_hash] = values;
+        const matched = tables.books_os_archive_entries.filter(
+          (r) =>
+            r.youniverse_id === youniverse_id &&
+            r.source_artifact_id === source_artifact_id &&
+            r.version_hash === version_hash
+        );
+        return Promise.resolve(matched.slice(0, 1).map((r) => ({ ...r })));
+      }
+      if (
+        query.includes("WHERE youniverse_id = ?") &&
+        query.includes("AND source_artifact_id IS NULL") &&
+        query.includes("AND version_hash = ?")
+      ) {
+        const [youniverse_id, version_hash] = values;
+        const matched = tables.books_os_archive_entries.filter(
+          (r) =>
+            r.youniverse_id === youniverse_id &&
+            r.source_artifact_id === null &&
+            r.version_hash === version_hash
+        );
+        return Promise.resolve(matched.slice(0, 1).map((r) => ({ ...r })));
+      }
+      if (query.includes("WHERE youniverse_id = ?") && query.includes("AND source_artifact_id = ?")) {
+        const [youniverse_id, source_artifact_id, limit] = values;
+        const matched = tables.books_os_archive_entries
+          .filter(
+            (r) => r.youniverse_id === youniverse_id && r.source_artifact_id === source_artifact_id
+          )
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, Number(limit) || 50);
+        return Promise.resolve(matched.map((r) => ({ ...r })));
+      }
+      if (query.includes("WHERE youniverse_id = ?")) {
+        const [youniverse_id, limit] = values;
+        const matched = tables.books_os_archive_entries
+          .filter((r) => r.youniverse_id === youniverse_id)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, Number(limit) || 50);
+        return Promise.resolve(matched.map((r) => ({ ...r })));
+      }
+    }
+
+    if (query.includes("UPDATE books_os_archive_entries")) {
+      const [webhook_sync_status, webhook_synced_at, id, youniverse_id] = values;
+      const row = tables.books_os_archive_entries.find(
+        (r) => r.id === id && r.youniverse_id === youniverse_id
+      );
+      if (row) {
+        row.webhook_sync_status = webhook_sync_status;
+        row.webhook_synced_at = webhook_synced_at ? new Date(webhook_synced_at) : null;
+        row.updated_at = new Date();
+      }
+      return Promise.resolve([]);
+    }
+
+    // ── 8b-3. Collection Point submissions persistence ──────────────────────
+    if (query.includes("INSERT INTO collection_point_submissions")) {
+      const [
+        id,
+        youniverse_id,
+        widget_id,
+        collection_type,
+        email,
+        name,
+        message,
+        payloadJsonRaw,
+        source_origin,
+      ] = values;
+      const payload_json =
+        typeof payloadJsonRaw === "string" ? JSON.parse(payloadJsonRaw) : payloadJsonRaw ?? {};
+      tables.collection_point_submissions.push({
+        id,
+        youniverse_id,
+        widget_id: widget_id ?? null,
+        collection_type,
+        email: email ?? null,
+        name: name ?? null,
+        message: message ?? null,
+        payload_json,
+        source_origin: source_origin ?? null,
+        created_at: new Date(),
+      });
+      return Promise.resolve([]);
+    }
+
+    if (query.includes("FROM collection_point_submissions")) {
+      if (
+        query.includes("WHERE youniverse_id = ?") &&
+        query.includes("AND widget_id = ?") &&
+        query.includes("AND collection_type = ?")
+      ) {
+        const [youniverse_id, widget_id, collection_type, limit] = values;
+        const matched = tables.collection_point_submissions
+          .filter(
+            (r) =>
+              r.youniverse_id === youniverse_id &&
+              r.widget_id === widget_id &&
+              r.collection_type === collection_type
+          )
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, Number(limit) || 100);
+        return Promise.resolve(matched.map((r) => ({ ...r })));
+      }
+      if (query.includes("WHERE youniverse_id = ?") && query.includes("AND widget_id = ?")) {
+        const [youniverse_id, widget_id, limit] = values;
+        const matched = tables.collection_point_submissions
+          .filter((r) => r.youniverse_id === youniverse_id && r.widget_id === widget_id)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, Number(limit) || 100);
+        return Promise.resolve(matched.map((r) => ({ ...r })));
+      }
+      if (query.includes("WHERE youniverse_id = ?") && query.includes("AND collection_type = ?")) {
+        const [youniverse_id, collection_type, limit] = values;
+        const matched = tables.collection_point_submissions
+          .filter(
+            (r) => r.youniverse_id === youniverse_id && r.collection_type === collection_type
+          )
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, Number(limit) || 100);
+        return Promise.resolve(matched.map((r) => ({ ...r })));
+      }
+      if (query.includes("WHERE youniverse_id = ?")) {
+        const [youniverse_id, limit] = values;
+        const matched = tables.collection_point_submissions
+          .filter((r) => r.youniverse_id === youniverse_id)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, Number(limit) || 100);
+        return Promise.resolve(matched.map((r) => ({ ...r })));
+      }
     }
 
     // ── 8c. youniverse_identities plan lookup ───────────────────────────────

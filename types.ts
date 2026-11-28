@@ -19,6 +19,14 @@ import type {
   OwnerRole,
   OnboardingState,
 } from "./types/onboarding";
+import type {
+  WeaverFileTree,
+  WeaverIteration,
+  WeaverSandboxConfig,
+} from "./lib/weaverProject.ts";
+import type { BooksOsArchiveBadge } from "./lib/booksOsBridge.ts";
+
+export type { BooksOsArchiveBadge };
 
 export type {
   AppId,
@@ -42,12 +50,18 @@ export interface AppProps {
 export interface WeavedWidget {
   id: string;
   title: string;
+  schemaVersion?: 1 | 2;
   code: string;
   dependencies: string[];
+  entryFile?: string;
+  files?: WeaverFileTree;
+  iterations?: WeaverIteration[];
+  sandboxConfig?: WeaverSandboxConfig;
   publicationStatus?: "draft" | "published" | "unpublished";
   isPublished?: boolean;
   publishedAt?: string | null;
   unpublishedAt?: string | null;
+  booksOsArchive?: BooksOsArchiveBadge | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }

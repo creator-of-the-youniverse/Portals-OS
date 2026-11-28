@@ -151,9 +151,14 @@ const useKernelStore = create<KernelState>()(
             width: Math.min(1300, screenWidth - 100),
             height: Math.min(800, screenHeight - 100)
           };
+        } else if (appId === 'weaver' && size.width === 600 && size.height === 450) {
+          size = {
+            width: Math.min(1280, screenWidth - 80),
+            height: Math.min(780, screenHeight - 90)
+          };
         }
 
-        if (appId === 'subscription') {
+        if (appId === 'subscription' || appId === 'weaver') {
           position = {
             x: Math.max(0, (screenWidth - size.width) / 2),
             y: Math.max(0, (screenHeight - size.height) / 2)
@@ -802,11 +807,37 @@ Implement the primary directives outlined above to accelerate revenue.
         const project = get().notNotes.projects[projectId];
         if (!project) return false;
 
-        // Simulate API call to Books OS
-        console.log(`[BOOKS OS] Archiving to: ${location.tower} -> ${location.shelf} -> ${location.book} -> ${location.page}`);
-        console.log(`[BOOKS OS] Summary by ONEAI: ${summary}`);
-        
-        return true;
+        try {
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (typeof window !== "undefined") {
+            const jwt =
+              localStorage.getItem("youniverse_session_token") ||
+              localStorage.getItem("weaver_jwt") ||
+              sessionStorage.getItem("weaver_jwt");
+            if (jwt) headers.Authorization = `Bearer ${jwt}`;
+          }
+          const handle = get().onboarding?.handle;
+          if (handle) headers["X-Youniverse-Handle"] = handle;
+
+          const response = await fetch("/api/not-notes/archive", {
+            method: "POST",
+            credentials: "same-origin",
+            headers,
+            body: JSON.stringify({
+              entryType: "notnote_artifact",
+              sourceArtifactId: project.id,
+              title: project.title,
+              summary,
+              bodyMarkdown: project.artifact || summary,
+              coordinates: location,
+            }),
+          });
+          const data = await response.json().catch(() => null);
+          return Boolean(response.ok && data?.success);
+        } catch (err) {
+          console.error("[BOOKS OS] Archival commit failed:", err);
+          return false;
+        }
       },
 
       setIsMobile: (status) => set({ isMobile: status }),

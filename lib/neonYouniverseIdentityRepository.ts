@@ -3,13 +3,20 @@ import { assertSafeDatabaseTarget } from "./creatorOwnership.ts";
 import type { YouniverseIdentityRepository } from "./youniverseIdentityRepository";
 import type { YouniverseIdentityRecord } from "./youniverseIdentityTypes";
 
-export function createNeonYouniverseIdentityRepository(
-  databaseUrl: string,
-  env: Record<string, string | undefined> = process.env
-): YouniverseIdentityRepository {
-  assertSafeDatabaseTarget(databaseUrl, env);
-  const sql = neon(databaseUrl);
+function mapIdentityRow(row: Record<string, any>): YouniverseIdentityRecord {
+  return {
+    identityId: String(row.identity_id),
+    username: String(row.username),
+    displayName: String(row.display_name),
+    subdomain: String(row.subdomain),
+    identityType: row.identity_type as YouniverseIdentityRecord["identityType"],
+    createdAt: new Date(row.created_at as string | Date).toISOString(),
+  };
+}
 
+export function createSqlYouniverseIdentityRepository(
+  sql: any
+): YouniverseIdentityRepository {
   return {
     async findByUsername(username) {
       const rows = await sql`
@@ -19,30 +26,17 @@ export function createNeonYouniverseIdentityRepository(
           display_name,
           subdomain,
           identity_type,
-          email,
-          plan,
           created_at
         FROM youniverse_identities
         WHERE username = ${username}
         LIMIT 1
       `;
 
-      if (rows.length === 0) {
+      if (!Array.isArray(rows) || rows.length === 0) {
         return null;
       }
 
-      const row = rows[0];
-
-      return {
-        identityId: String(row.identity_id),
-        username: String(row.username),
-        displayName: String(row.display_name),
-        subdomain: String(row.subdomain),
-        identityType: row.identity_type as YouniverseIdentityRecord["identityType"],
-        email: row.email ? String(row.email) : undefined,
-        plan: row.plan ? String(row.plan) : "free",
-        createdAt: new Date(row.created_at as string | Date).toISOString(),
-      };
+      return mapIdentityRow(rows[0]);
     },
 
     async create(identity) {
@@ -73,23 +67,19 @@ export function createNeonYouniverseIdentityRepository(
           display_name,
           subdomain,
           identity_type,
-          email,
-          plan,
           created_at
       `;
 
-      const row = rows[0];
-
-      return {
-        identityId: String(row.identity_id),
-        username: String(row.username),
-        displayName: String(row.display_name),
-        subdomain: String(row.subdomain),
-        identityType: row.identity_type as YouniverseIdentityRecord["identityType"],
-        email: row.email ? String(row.email) : undefined,
-        plan: row.plan ? String(row.plan) : "free",
-        createdAt: new Date(row.created_at as string | Date).toISOString(),
-      };
+      return mapIdentityRow(rows[0]);
     },
   };
+}
+
+export function createNeonYouniverseIdentityRepository(
+  databaseUrl: string,
+  env: Record<string, string | undefined> = process.env
+): YouniverseIdentityRepository {
+  assertSafeDatabaseTarget(databaseUrl, env);
+  const sql = neon(databaseUrl);
+  return createSqlYouniverseIdentityRepository(sql);
 }

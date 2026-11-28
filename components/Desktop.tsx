@@ -295,7 +295,8 @@ const Desktop: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     width: '14px',
                     height: '14px',
                   }}
-                  // Larger invisible hover area for ONE orb interaction
+                  // Larger invisible hover area for Atom orb interaction
+                  data-atom={`${node.name} — ${node.role}. ${node.description}. Click to open forensic dossier.`}
                   data-one={`${node.name} — ${node.role}. ${node.description}. Click to open forensic dossier.`}
                   onClick={(e) => {
                     e.stopPropagation();

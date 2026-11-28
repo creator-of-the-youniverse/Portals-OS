@@ -214,7 +214,6 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
   // ── 3. Issue single-use RS256 handoff ticket for destination workspace ──
   const nonce = randomBytes(24).toString("hex");
   const handoffExpiresAt = new Date(Date.now() + 90 * 1000); // 90 seconds
-  let handoffNoncePersisted = false;
 
   try {
     await sql`
@@ -229,9 +228,16 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
         ${handoffExpiresAt.toISOString()}
       )
     `;
-    handoffNoncePersisted = true;
-  } catch (handoffDbErr) {
-    console.warn("[/api/v1/auth/verify] Nonce insert notice (non-fatal if mock):", handoffDbErr);
+  } catch (handoffDbErr: any) {
+    // Fail closed for both HTML and JSON callers: an unpersisted nonce is unredeemable.
+    console.error("[/api/v1/auth/verify] Handoff nonce persistence failed.", {
+      code: typeof handoffDbErr?.code === "string" ? handoffDbErr.code : null,
+      constraint: typeof handoffDbErr?.constraint === "string" ? handoffDbErr.constraint : null,
+    });
+    if (typeof res.setHeader === "function") {
+      res.setHeader("Cache-Control", "no-store");
+    }
+    return res.status(500).json(HANDOFF_UNAVAILABLE_BODY);
   }
 
   const handoffToken = signHandoffTokenFn({
@@ -249,11 +255,6 @@ export default async function handler(req: any, res: any, deps: VerifyHandlerDep
 
   // ── 4. Browser navigation: redirect only on full success ───────────────
   if (wantsHtmlNavigation(req)) {
-    if (!handoffNoncePersisted) {
-      // An unpersisted nonce makes the ticket unredeemable; never send a success redirect.
-      return res.status(500).json(HANDOFF_UNAVAILABLE_BODY);
-    }
-
     if (!isTrustedRedirectDestination(destinationUrl, consumeResult.username)) {
       // Never log destinationUrl: it carries the signed handoff ticket.
       console.error("[/api/v1/auth/verify] Refusing redirect: destination failed validation.");

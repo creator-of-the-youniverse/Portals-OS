@@ -521,16 +521,24 @@ test("R15-04e: Malformed, non-RSA, or weak (<2048-bit) HANDOFF_PRIVATE_KEY fails
   }
 });
 
-test("R15-04c: JSON path keeps legacy non-fatal nonce-insert behavior (preserved contract)", async () => {
+test("R15-04c: JSON path fails closed (500 handoff_unavailable) on nonce-insert failure — no false success", async () => {
   const db = createMockDb({ failHandoffInsert: true });
   const rawToken = db.seedIdentity({ identityId: "ident_jo", username: "jo" });
 
-  const { req, res } = createMockReqRes({ query: { token: rawToken }, headers: { host: "www.itsyouonline.com" } });
-  await captureConsole(() => verifyHandler(req, res, { sql: db.sql }));
+  const { req, res } = createMockReqRes({
+    query: { token: rawToken },
+    headers: { host: "www.itsyouonline.com", accept: "application/json" },
+  });
+  const { logs } = await captureConsole(() => verifyHandler(req, res, { sql: db.sql }));
 
-  assert.strictEqual(res.statusCode, 200);
-  assert.strictEqual(res.body.success, true);
+  assert.strictEqual(res.statusCode, 500);
+  assert.strictEqual(res.body.success, false);
+  assert.strictEqual(res.body.error, "handoff_unavailable");
+  assert.strictEqual(res.body.handoffToken, undefined);
+  assert.strictEqual(res.body.destinationUrl, undefined);
+  assert.strictEqual(res.body.sessionToken, undefined);
   assertNoRedirect(res, "json nonce failure");
+  assert.ok(!logs.includes(rawToken), "Raw verification token must not be logged");
 });
 
 // ────────────────────────────────────────────────────────────────────────────

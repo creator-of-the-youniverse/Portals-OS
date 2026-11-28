@@ -140,31 +140,68 @@ export function accountIdForEmail(email: string): string {
   return `acct_${createHash("md5").update(normalized, "utf8").digest("hex")}`;
 }
 
+function extractDatabaseHostname(raw: string): string {
+  try {
+    return new URL(raw).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 function isProductionDatabaseTarget(
   databaseUrl: string | undefined,
   env: Record<string, string | undefined>
 ): boolean {
-  const candidate = (databaseUrl ?? env.DATABASE_URL ?? "").trim();
-  if (!candidate) return false;
+  const explicitUrl = (databaseUrl ?? "").trim();
+  const envUrl = (env.DATABASE_URL ?? "").trim();
+  const unpooledUrl = (env.DATABASE_URL_UNPOOLED ?? "").trim();
+  const pghost = (env.PGHOST ?? env.POSTGRES_HOST ?? "").trim().toLowerCase();
+  const prodUrl = (env.PRODUCTION_DATABASE_URL ?? "").trim();
+  const prodHost = prodUrl ? extractDatabaseHostname(prodUrl) : "";
 
-  if (candidate.toLowerCase().includes(PRODUCTION_NEON_ENDPOINT_MARKER)) {
+  const matchesProdSignal = (value: string): boolean => {
+    if (!value) return false;
+    if (value.toLowerCase().includes(PRODUCTION_NEON_ENDPOINT_MARKER)) {
+      return true;
+    }
+    const candidateHost = extractDatabaseHostname(value);
+    if (candidateHost && candidateHost.includes(PRODUCTION_NEON_ENDPOINT_MARKER)) {
+      return true;
+    }
+    if (prodHost && candidateHost && candidateHost === prodHost) {
+      return true;
+    }
+    return Boolean(prodUrl && value === prodUrl);
+  };
+
+  // Evaluate resolved URI; if absent or hostless (e.g. `postgresql:///neondb`), also inspect PGHOST/env fallback.
+  const primaryUrl = explicitUrl || envUrl;
+  if (primaryUrl) {
+    if (matchesProdSignal(primaryUrl)) return true;
+    if (extractDatabaseHostname(primaryUrl)) {
+      if (!explicitUrl && unpooledUrl && matchesProdSignal(unpooledUrl)) {
+        return true;
+      }
+      return false;
+    }
+  }
+
+  if (unpooledUrl && matchesProdSignal(unpooledUrl)) {
     return true;
   }
 
-  const prodUrl = (env.PRODUCTION_DATABASE_URL ?? "").trim();
-  if (!prodUrl) return false;
-
-  try {
-    return new URL(candidate).host.toLowerCase() === new URL(prodUrl).host.toLowerCase();
-  } catch {
-    return candidate === prodUrl;
+  if (pghost) {
+    if (pghost.includes(PRODUCTION_NEON_ENDPOINT_MARKER)) return true;
+    if (prodHost && pghost === prodHost) return true;
   }
+
+  return false;
 }
 
 const STAGING_NEON_ENDPOINT_MARKER = "ep-aged-lake-avdgndee";
 
 function resolveNormalizedVercelEnv(env: Record<string, string | undefined>): string {
-  const raw = "VERCEL_ENV" in env ? env.VERCEL_ENV : process.env.VERCEL_ENV;
+  const raw = env === process.env ? process.env.VERCEL_ENV : env.VERCEL_ENV;
   return String(raw ?? "").trim().toLowerCase();
 }
 
@@ -172,29 +209,53 @@ function isStagingDatabaseTarget(
   databaseUrl: string | undefined,
   env: Record<string, string | undefined>
 ): boolean {
-  const candidate = (databaseUrl ?? env.DATABASE_URL ?? "").trim().toLowerCase();
-  if (!candidate) return false;
-  return candidate.includes(STAGING_NEON_ENDPOINT_MARKER);
+  const explicitUrl = (databaseUrl ?? "").trim();
+  const envUrl = (env.DATABASE_URL ?? "").trim();
+  const primaryUrl = explicitUrl || envUrl;
+  const pghost = (env.PGHOST ?? env.POSTGRES_HOST ?? "").trim().toLowerCase();
+
+  if (primaryUrl) {
+    if (primaryUrl.toLowerCase().includes(STAGING_NEON_ENDPOINT_MARKER)) {
+      return true;
+    }
+    if (extractDatabaseHostname(primaryUrl)) {
+      return false;
+    }
+  }
+
+  return Boolean(pghost && pghost.includes(STAGING_NEON_ENDPOINT_MARKER));
 }
 
 /**
- * Fails closed whenever a Vercel Preview runtime attempts to connect to the
+ * Fails closed whenever a non-production runtime attempts to connect to the
  * Production Neon endpoint (`ep-aged-dew-av9711nr` or `PRODUCTION_DATABASE_URL`),
  * or when a Production runtime attempts to connect to Staging (`ep-aged-lake-avdgndee`).
+ * Only an explicit Vercel Production runtime (`VERCEL_ENV === "production"`) may target Production Neon.
  */
 export function assertSafeDatabaseTarget(
   databaseUrl: string | undefined,
   env: Record<string, string | undefined> = process.env
 ): void {
   const vercelEnv = resolveNormalizedVercelEnv(env);
-  if (vercelEnv === "preview" && isProductionDatabaseTarget(databaseUrl, env)) {
-    throw new Error(
-      "FATAL: Preview deployment is prohibited from targeting Production Neon endpoint ep-aged-dew-av9711nr."
-    );
-  }
+
   if (vercelEnv === "production" && isStagingDatabaseTarget(databaseUrl, env)) {
     throw new Error(
       "FATAL: Production deployment is prohibited from targeting Staging Neon endpoint ep-aged-lake-avdgndee."
+    );
+  }
+
+  if (isProductionDatabaseTarget(databaseUrl, env)) {
+    if (vercelEnv === "production") {
+      return;
+    }
+    if (vercelEnv === "preview") {
+      throw new Error(
+        "FATAL: Preview deployment is prohibited from targeting Production Neon endpoint ep-aged-dew-av9711nr."
+      );
+    }
+    const runtimeLabel = vercelEnv || "local";
+    throw new Error(
+      `FATAL: Non-production runtime (${runtimeLabel}) is prohibited from targeting Production Neon endpoint ep-aged-dew-av9711nr. Configure a Staging or local database target.`
     );
   }
 }

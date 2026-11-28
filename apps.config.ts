@@ -181,6 +181,9 @@ export const getCoreApps = (
     metadata: {
       code: widget.code,
       componentName: widget.title,
+      files: widget.files,
+      entryFile: widget.entryFile,
+      sandboxConfig: widget.sandboxConfig,
     },
     isCustom: true,
   }));

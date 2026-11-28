@@ -7,17 +7,22 @@
  *   - POST / PUT / PATCH /api/not-notes/update
  *   - POST / PATCH       /api/not-notes/publish
  *   - POST / PATCH       /api/not-notes/unpublish
+ *   - POST / PATCH       /api/not-notes/archive
+ *   - GET                /api/not-notes/submissions
  */
 
 import artifactHandler from "../../lib/handlers/not-notes/artifact.ts";
 import widgetsHandler from "../../lib/handlers/not-notes/widgets.ts";
+import submissionsHandler from "../../lib/handlers/not-notes/submissions.ts";
 
 const NOT_NOTES_ACTION_MAP: Record<string, (req: any, res: any, deps?: any) => Promise<any>> = {
   artifact: (req, res, deps = {}) => artifactHandler(req, res, deps),
   widgets: (req, res, deps = {}) => widgetsHandler(req, res, deps),
+  submissions: (req, res, deps = {}) => submissionsHandler(req, res, deps),
   update: (req, res, deps = {}) => artifactHandler(req, res, { ...deps, forcedAction: "update" }),
   publish: (req, res, deps = {}) => artifactHandler(req, res, { ...deps, forcedAction: "publish" }),
   unpublish: (req, res, deps = {}) => artifactHandler(req, res, { ...deps, forcedAction: "unpublish" }),
+  archive: (req, res, deps = {}) => artifactHandler(req, res, { ...deps, forcedAction: "archive" }),
 };
 
 export function resolveNotNotesAction(req: any): string {

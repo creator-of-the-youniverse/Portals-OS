@@ -24,7 +24,6 @@ export interface NexusAgent {
     outputDelivered: string[];
     doNotUseWhen: string[];
     useCases: string[];
-    bestNextStep: string;
   };
 }
 
@@ -103,8 +102,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
         "Redlining liability",
         "IP protection",
         "Enforcing payment triggers"
-      ],
-      "bestNextStep": "CFOE (Finance)"
+      ]
     }
   },
   {
@@ -139,8 +137,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Service-to-Platform transition",
         "Niche dominance"
-      ],
-      "bestNextStep": "BVP (Validation)"
+      ]
     }
   },
   {
@@ -174,8 +171,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Pre-emptive save",
         "Onboarding verification"
-      ],
-      "bestNextStep": "MRSI (Referrals)"
+      ]
     }
   },
   {
@@ -209,8 +205,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Problem-Solution fit",
         "Offer stress-test"
-      ],
-      "bestNextStep": "DGLI (Growth)"
+      ]
     }
   },
   {
@@ -244,8 +239,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Tiered pricing build",
         "Discount thresholding"
-      ],
-      "bestNextStep": "CFOE (Finance)"
+      ]
     }
   },
   {
@@ -279,8 +273,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "SaaS pricing audit",
         "Enterprise CAC calc"
-      ],
-      "bestNextStep": "YPC (Profit)"
+      ]
     }
   },
   {
@@ -314,8 +307,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "VSL Intro",
         "Ad hook"
-      ],
-      "bestNextStep": "ESI (Social)"
+      ]
     }
   },
   {
@@ -349,8 +341,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Paid acquisition plan",
         "Organic growth engine"
-      ],
-      "bestNextStep": "LCPC (Closing)"
+      ]
     }
   },
   {
@@ -384,8 +375,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Multi-channel scheduling",
         "Brand voice sync"
-      ],
-      "bestNextStep": "EACPC (Amplification)"
+      ]
     }
   },
   {
@@ -419,8 +409,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "PR campaign design",
         "Influencer syndication"
-      ],
-      "bestNextStep": "RSI (SEO)"
+      ]
     }
   },
   {
@@ -454,8 +443,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Cold email sequence",
         "LinkedIn outreach"
-      ],
-      "bestNextStep": "JD (DMs)"
+      ]
     }
   },
   {
@@ -489,8 +477,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Market-shift response",
         "Crisis pivot"
-      ],
-      "bestNextStep": "VFOE (Forecasting)"
+      ]
     }
   },
   {
@@ -524,8 +511,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Ad policy check",
         "GDPR/Terms audit"
-      ],
-      "bestNextStep": "ACPC (Contracts)"
+      ]
     }
   },
   {
@@ -559,8 +545,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Scaling infrastructure",
         "Backend build"
-      ],
-      "bestNextStep": "SCPC (Culture)"
+      ]
     }
   },
   {
@@ -594,8 +579,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Crisis management",
         "Brand protection"
-      ],
-      "bestNextStep": "VP (Pivot)"
+      ]
     }
   },
   {
@@ -629,8 +613,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Community launch",
         "Viral challenge"
-      ],
-      "bestNextStep": "OLI (Loops)"
+      ]
     }
   },
   {
@@ -664,8 +647,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Stack integration",
         "Database mapping"
-      ],
-      "bestNextStep": "XRF (Funnels)"
+      ]
     }
   },
   {
@@ -699,8 +681,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Funnel autopsy",
         "Gap analysis"
-      ],
-      "bestNextStep": "RDHPC (Disruption)"
+      ]
     }
   },
   {
@@ -734,8 +715,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Lead qualification",
         "Objection handling"
-      ],
-      "bestNextStep": "LCPC (Closing)"
+      ]
     }
   },
   {
@@ -769,8 +749,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Flash sale shock",
         "Deadline pressure"
-      ],
-      "bestNextStep": "LCPC (Closing)"
+      ]
     }
   },
   {
@@ -804,8 +783,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Long-form VSL",
         "60-second 'Short' VSL"
-      ],
-      "bestNextStep": "DGLI (Growth)"
+      ]
     }
   },
   {
@@ -839,8 +817,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Waitlist strategy",
         "Application-only logic"
-      ],
-      "bestNextStep": "DGLI (Growth)"
+      ]
     }
   },
   {
@@ -874,8 +851,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Behavior scoring",
         "Retargeting logic"
-      ],
-      "bestNextStep": "JD (DMs)"
+      ]
     }
   },
   {
@@ -909,8 +885,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Closing call script",
         "One-click checkout"
-      ],
-      "bestNextStep": "CFOE (Finance)"
+      ]
     }
   },
   {
@@ -944,8 +919,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Referral loop build",
         "Reward system"
-      ],
-      "bestNextStep": "HTR (Tribal)"
+      ]
     }
   },
   {
@@ -979,8 +953,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Status-vs-Savings test",
         "Reciprocity loop"
-      ],
-      "bestNextStep": "LCPC (Closing)"
+      ]
     }
   },
   {
@@ -1014,8 +987,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Onboarding SOP",
         "Fulfillment checklist"
-      ],
-      "bestNextStep": "GSI (Systems)"
+      ]
     }
   },
   {
@@ -1049,8 +1021,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Lead-to-Sale automation",
         "CRM sync"
-      ],
-      "bestNextStep": "QMRSI (Metrics)"
+      ]
     }
   },
   {
@@ -1084,8 +1055,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Multiplier audit",
         "Broker prep"
-      ],
-      "bestNextStep": "ZLI (Legacy)"
+      ]
     }
   },
   {
@@ -1119,8 +1089,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Retention loop build",
         "Habit-forming UX"
-      ],
-      "bestNextStep": "YPC (Profit)"
+      ]
     }
   },
   {
@@ -1154,8 +1123,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "TikTok/Reels edit",
         "Newsletter snippet"
-      ],
-      "bestNextStep": "ESI (Social)"
+      ]
     }
   },
   {
@@ -1189,8 +1157,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "UI/UX refinement",
         "Fulfillment speed"
-      ],
-      "bestNextStep": "BVP (Validation)"
+      ]
     }
   },
   {
@@ -1224,8 +1191,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Sales page edit",
         "A/B headline test"
-      ],
-      "bestNextStep": "DHPC (Hooks)"
+      ]
     }
   },
   {
@@ -1259,8 +1225,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Dashboard build",
         "Weekly target audit"
-      ],
-      "bestNextStep": "XDHPC (Diagnostics)"
+      ]
     }
   },
   {
@@ -1294,8 +1259,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "On-page audit",
         "Content silo build"
-      ],
-      "bestNextStep": "LI (Intent)"
+      ]
     }
   },
   {
@@ -1329,8 +1293,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Business model rift",
         "Positioning twist"
-      ],
-      "bestNextStep": "ASI (Strategy)"
+      ]
     }
   },
   {
@@ -1364,8 +1327,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Tone-of-voice sync",
         "Style guide gen"
-      ],
-      "bestNextStep": "QC (Copy)"
+      ]
     }
   },
   {
@@ -1399,8 +1361,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Hiring filter",
         "Brand alignment"
-      ],
-      "bestNextStep": "GSI (Systems)"
+      ]
     }
   },
   {
@@ -1434,8 +1395,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Funnel hack",
         "Weakness exploit"
-      ],
-      "bestNextStep": "IRSI (Research)"
+      ]
     }
   },
   {
@@ -1469,8 +1429,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Project kickstart",
         "Friction removal"
-      ],
-      "bestNextStep": "WSI (Speed)"
+      ]
     }
   },
   {
@@ -1504,8 +1463,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Time-blocking build",
         "Ritual design"
-      ],
-      "bestNextStep": "NSI (SOPs)"
+      ]
     }
   },
   {
@@ -1539,8 +1497,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Cost audit",
         "Resource reallocation"
-      ],
-      "bestNextStep": "CFOE (Finance)"
+      ]
     }
   },
   {
@@ -1574,8 +1531,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Offer refresh",
         "Viral pivot"
-      ],
-      "bestNextStep": "JSI (Sales)"
+      ]
     }
   },
   {
@@ -1609,8 +1565,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Future-proofing",
         "Trend forecasting"
-      ],
-      "bestNextStep": "ZLI (Legacy)"
+      ]
     }
   },
   {
@@ -1644,8 +1599,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "MVP Launch",
         "Beta test setup"
-      ],
-      "bestNextStep": "DGLI (Growth)"
+      ]
     }
   },
   {
@@ -1679,8 +1633,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Time-compression",
         "Rapid deployment"
-      ],
-      "bestNextStep": "QMRSI (Metrics)"
+      ]
     }
   },
   {
@@ -1714,8 +1667,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Drop-off audit",
         "Speed test"
-      ],
-      "bestNextStep": "LI (Intent)"
+      ]
     }
   },
   {
@@ -1749,8 +1701,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Vulnerability audit",
         "Structural check"
-      ],
-      "bestNextStep": "UESI (Efficiency)"
+      ]
     }
   },
   {
@@ -1784,8 +1735,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Post-purchase offer",
         "Bundle design"
-      ],
-      "bestNextStep": "CFOE (Finance)"
+      ]
     }
   },
   {
@@ -1819,8 +1769,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Dead-lead monetizing",
         "License strategy"
-      ],
-      "bestNextStep": "OE (Exit)"
+      ]
     }
   },
   {
@@ -1854,8 +1803,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Project scheduling",
         "Deadline enforcement"
-      ],
-      "bestNextStep": "QMRSI (Quota)"
+      ]
     }
   },
   {
@@ -1889,8 +1837,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Succession plan",
         "Legacy design"
-      ],
-      "bestNextStep": "EXIT"
+      ]
     }
   },
   {
@@ -1924,8 +1871,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Crisis detection",
         "Sentiment tracking"
-      ],
-      "bestNextStep": "HPC (Hush)"
+      ]
     }
   },
   {
@@ -1959,8 +1905,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Automated review request",
         "Testimonial display"
-      ],
-      "bestNextStep": "BTR (Badge)"
+      ]
     }
   },
   {
@@ -1994,8 +1939,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Newsjacking",
         "Viral content ideas"
-      ],
-      "bestNextStep": "FACPC (Flux)"
+      ]
     }
   },
   {
@@ -2029,8 +1973,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "TAM/SAM/SOM calc",
         "Audience segmentation"
-      ],
-      "bestNextStep": "ASI (Strategy)"
+      ]
     }
   },
   {
@@ -2064,8 +2007,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Pre-launch scan",
         "Competitor movement check"
-      ],
-      "bestNextStep": "IRSI (Intel)"
+      ]
     }
   },
   {
@@ -2099,8 +2041,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Keyword gap analysis",
         "Low-hanging fruit"
-      ],
-      "bestNextStep": "AC1 (Anchor)"
+      ]
     }
   },
   {
@@ -2134,8 +2075,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Broken link check",
         "Core Web Vitals fix"
-      ],
-      "bestNextStep": "XRF (Funnels)"
+      ]
     }
   },
   {
@@ -2169,8 +2109,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Blog post optimization",
         "Landing page SEO"
-      ],
-      "bestNextStep": "SBRSI (Signal)"
+      ]
     }
   },
   {
@@ -2204,8 +2143,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Guest post strategy",
         "Broken link building"
-      ],
-      "bestNextStep": "ESI (Social)"
+      ]
     }
   },
   {
@@ -2239,8 +2177,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Description rewrite",
         "Image gallery audit"
-      ],
-      "bestNextStep": "CRSI (Cart)"
+      ]
     }
   },
   {
@@ -2274,8 +2211,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Email sequence",
         "SMS recovery"
-      ],
-      "bestNextStep": "SC1 (Seal)"
+      ]
     }
   },
   {
@@ -2309,8 +2245,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "One-click upsell",
         "Checkout bump"
-      ],
-      "bestNextStep": "YU (Yield)"
+      ]
     }
   },
   {
@@ -2344,8 +2279,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Form optimization",
         "Payment option audit"
-      ],
-      "bestNextStep": "BTR (Badge)"
+      ]
     }
   },
   {
@@ -2379,8 +2313,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Trust badge placement",
         "Guarantee framing"
-      ],
-      "bestNextStep": "PRSI (Proof)"
+      ]
     }
   },
   {
@@ -2414,8 +2347,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "B2B SaaS targeting",
         "DTC persona build"
-      ],
-      "bestNextStep": "VBRSI (Voice)"
+      ]
     }
   },
   {
@@ -2449,8 +2381,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Tone-of-voice sync",
         "Style guide gen"
-      ],
-      "bestNextStep": "BSI (Blueprint)"
+      ]
     }
   },
   {
@@ -2484,8 +2415,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "E-commerce promo calendar",
         "SaaS launch planning"
-      ],
-      "bestNextStep": "BTR (Brief)"
+      ]
     }
   },
   {
@@ -2519,8 +2449,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "90-day content plan",
         "Funnel-stage content mapping"
-      ],
-      "bestNextStep": "SRSI (Slice)"
+      ]
     }
   },
   {
@@ -2554,8 +2483,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "7-email nurture sequence",
         "Lead reactivation flow"
-      ],
-      "bestNextStep": "SMVP (Segment)"
+      ]
     }
   },
   {
@@ -2589,8 +2517,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Hero copy optimization",
         "Benefit bullet refinement"
-      ],
-      "bestNextStep": "PSPC (Proof)"
+      ]
     }
   },
   {
@@ -2624,8 +2551,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "TikTok ad hooks",
         "Meta ad angles"
-      ],
-      "bestNextStep": "CCPC (Convert)"
+      ]
     }
   },
   {
@@ -2659,8 +2585,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Webinar to social clips",
         "Whitepaper to email series"
-      ],
-      "bestNextStep": "PSI (Post)"
+      ]
     }
   },
   {
@@ -2694,8 +2619,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Topical authority map",
         "SEO content hierarchy"
-      ],
-      "bestNextStep": "BSI (Blueprint)"
+      ]
     }
   },
   {
@@ -2729,8 +2653,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Agency campaign brief",
         "Internal creative spec"
-      ],
-      "bestNextStep": "AC2 (Angle)"
+      ]
     }
   },
   {
@@ -2764,8 +2687,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Social content pack",
         "Post template library"
-      ],
-      "bestNextStep": "RKVP (Report)"
+      ]
     }
   },
   {
@@ -2799,8 +2721,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Brand lookbook gen",
         "Visual style guide"
-      ],
-      "bestNextStep": "VBRSI (Voice)"
+      ]
     }
   },
   {
@@ -2834,8 +2755,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Competitive positioning matrix",
         "Market differentiation doc"
-      ],
-      "bestNextStep": "PITR (Persona)"
+      ]
     }
   },
   {
@@ -2869,8 +2789,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Testimonial library build",
         "Social proof asset map"
-      ],
-      "bestNextStep": "OCPC (OneSheet)"
+      ]
     }
   },
   {
@@ -2904,8 +2823,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Product one-pager gen",
         "Sales collateral build"
-      ],
-      "bestNextStep": "PQC (Package)"
+      ]
     }
   },
   {
@@ -2939,8 +2857,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "SMB vs Enterprise nurture",
         "Persona-based email flow"
-      ],
-      "bestNextStep": "NSQC (Nurture)"
+      ]
     }
   },
   {
@@ -2974,8 +2891,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Monthly board update template",
         "Performance narrative gen"
-      ],
-      "bestNextStep": "SACPC (Story)"
+      ]
     }
   },
   {
@@ -3009,8 +2925,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "ROI narrative deck",
         "Attribution story gen"
-      ],
-      "bestNextStep": "TPC (Tempo)"
+      ]
     }
   },
   {
@@ -3044,8 +2959,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Pricing tier framing",
         "Value comparison table"
-      ],
-      "bestNextStep": "CCPC (Convert)"
+      ]
     }
   },
   {
@@ -3079,8 +2993,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Webinar promotion kit",
         "Live event sequence"
-      ],
-      "bestNextStep": "PSI (Post)"
+      ]
     }
   },
   {
@@ -3114,8 +3027,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Crisis comms playbook",
         "Outage response templates"
-      ],
-      "bestNextStep": "ONSI (Origin)"
+      ]
     }
   },
   {
@@ -3149,8 +3061,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Seasonal idea bank",
         "Holiday offer concepts"
-      ],
-      "bestNextStep": "TPC (Tempo)"
+      ]
     }
   },
   {
@@ -3184,8 +3095,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Brand story gen",
         "Origin narrative build"
-      ],
-      "bestNextStep": "VBRSI (Voice)"
+      ]
     }
   },
   {
@@ -3219,8 +3129,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Localized copy pack",
         "Market nuance guide"
-      ],
-      "bestNextStep": "MMVP (Matrix)"
+      ]
     }
   },
   {
@@ -3254,8 +3163,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Affiliate toolkit gen",
         "Partner swipe files"
-      ],
-      "bestNextStep": "BTR (Brief)"
+      ]
     }
   },
   {
@@ -3289,8 +3197,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "B2B lead scoring model",
         "CRM qualification setup"
-      ],
-      "bestNextStep": "DDHPC (Discovery)"
+      ]
     }
   },
   {
@@ -3324,8 +3231,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "SDR discovery checklist",
         "AE discovery framework"
-      ],
-      "bestNextStep": "OE1 (Outreach)"
+      ]
     }
   },
   {
@@ -3359,8 +3265,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Persona-based outbound templates",
         "Trigger-based email sequences"
-      ],
-      "bestNextStep": "TCCPC (Track)"
+      ]
     }
   },
   {
@@ -3394,8 +3299,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Inside sales talk tracks",
         "Objection-aware scripts"
-      ],
-      "bestNextStep": "CFUWL (Cadence)"
+      ]
     }
   },
   {
@@ -3429,8 +3333,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Services proposal shell",
         "Enterprise quote template"
-      ],
-      "bestNextStep": "CR1 (Case)"
+      ]
     }
   },
   {
@@ -3464,8 +3367,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "10-touch follow-up cadence",
         "SMB show-rate booster"
-      ],
-      "bestNextStep": "OE1 (Outreach)"
+      ]
     }
   },
   {
@@ -3499,8 +3401,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Cybersecurity battlecards",
         "SaaS rival forensics"
-      ],
-      "bestNextStep": "ROE (Rebuttal)"
+      ]
     }
   },
   {
@@ -3534,8 +3435,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Price objection handling",
         "Priority objection playbook"
-      ],
-      "bestNextStep": "DPC (Demo)"
+      ]
     }
   },
   {
@@ -3569,8 +3469,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Outcome-led demo flow",
         "SaaS demo storyboard"
-      ],
-      "bestNextStep": "QPC (Quote)"
+      ]
     }
   },
   {
@@ -3604,8 +3503,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Enterprise ROI model",
         "Late-stage business case"
-      ],
-      "bestNextStep": "PDHPC (Pitch)"
+      ]
     }
   },
   {
@@ -3639,8 +3537,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Healthcare pitch deck",
         "Retail analytics deck"
-      ],
-      "bestNextStep": "IR1 (Intel)"
+      ]
     }
   },
   {
@@ -3674,8 +3571,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "10-K summary dossier",
         "Org chart mapping"
-      ],
-      "bestNextStep": "BCPC (Battlecard)"
+      ]
     }
   },
   {
@@ -3709,8 +3605,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Adjacent service cross-sell",
         "Account expansion playbook"
-      ],
-      "bestNextStep": "SR1 (Save)"
+      ]
     }
   },
   {
@@ -3744,8 +3639,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Usage-drop save sequence",
         "Proactive renewal playbook"
-      ],
-      "bestNextStep": "HSI (Handoff)"
+      ]
     }
   },
   {
@@ -3779,8 +3673,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Regional territory plan",
         "Sales coverage map"
-      ],
-      "bestNextStep": "MAPC (Mutual)"
+      ]
     }
   },
   {
@@ -3814,8 +3707,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Enterprise MAP spreadsheet",
         "Deal milestone tracker"
-      ],
-      "bestNextStep": "ECSI (Expand)"
+      ]
     }
   },
   {
@@ -3849,8 +3741,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "AE-to-CSM handoff brief",
         "Customer goal alignment doc"
-      ],
-      "bestNextStep": "RPS1 (Ramp)"
+      ]
     }
   },
   {
@@ -3884,8 +3775,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "AE onboarding roadmap",
         "New hire ramp plan"
-      ],
-      "bestNextStep": "MTR (Map)"
+      ]
     }
   },
   {
@@ -3919,8 +3809,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Pipeline creation SPIFF",
         "Sales contest design"
-      ],
-      "bestNextStep": "FWLI (Forensic)"
+      ]
     }
   },
   {
@@ -3954,8 +3843,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Quarterly win/loss report",
         "Win/loss interview framework"
-      ],
-      "bestNextStep": "SQC (Score)"
+      ]
     }
   },
   {
@@ -3989,8 +3877,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Fulfillment SOPs",
         "Returns processing guide"
-      ],
-      "bestNextStep": "FMRSI (Flow)"
+      ]
     }
   },
   {
@@ -4024,8 +3911,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Onboarding journey map",
         "Core workflow visualization"
-      ],
-      "bestNextStep": "RO2 (RACI)"
+      ]
     }
   },
   {
@@ -4059,8 +3945,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Support escalation mapping",
         "Project ownership table"
-      ],
-      "bestNextStep": "LC1 (Load)"
+      ]
     }
   },
   {
@@ -4094,8 +3979,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Retail reorder model",
         "SKU optimization"
-      ],
-      "bestNextStep": "LWL (Layout)"
+      ]
     }
   },
   {
@@ -4129,8 +4013,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Service team planner",
         "Volume vs Headcount audit"
-      ],
-      "bestNextStep": "SSQC (Shift)"
+      ]
     }
   },
   {
@@ -4164,8 +4047,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Database outage runbook",
         "Performance degradation guide"
-      ],
-      "bestNextStep": "COE (Crisis)"
+      ]
     }
   },
   {
@@ -4199,8 +4081,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Warehouse partner selection",
         "Software vendor audit"
-      ],
-      "bestNextStep": "SSLI (SLA)"
+      ]
     }
   },
   {
@@ -4234,8 +4115,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Managed services SLA",
         "Internal support targets"
-      ],
-      "bestNextStep": "JOE (Journey)"
+      ]
     }
   },
   {
@@ -4269,8 +4149,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Monthly margin report guide",
         "Volume reporting runbook"
-      ],
-      "bestNextStep": "SVP (Scorecard)"
+      ]
     }
   },
   {
@@ -4304,8 +4183,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "3PL zoning plan",
         "Fast-mover pick optimization"
-      ],
-      "bestNextStep": "RLI (Route)"
+      ]
     }
   },
   {
@@ -4339,8 +4217,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Regional delivery planning",
         "Last-mile optimization"
-      ],
-      "bestNextStep": "SI3 (Stock)"
+      ]
     }
   },
   {
@@ -4374,8 +4251,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Factory QC checklist",
         "Inspection standard"
-      ],
-      "bestNextStep": "AC3 (Audit)"
+      ]
     }
   },
   {
@@ -4409,8 +4285,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "SOC 2 control checklist",
         "ISO readiness audit"
-      ],
-      "bestNextStep": "RI1 (Runbook)"
+      ]
     }
   },
   {
@@ -4444,8 +4319,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Operations Handbook",
         "Internal Wiki seed"
-      ],
-      "bestNextStep": "HSCPC (Help)"
+      ]
     }
   },
   {
@@ -4479,8 +4353,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Store opening template",
         "Software rollout plan"
-      ],
-      "bestNextStep": "RMRSI (Risk)"
+      ]
     }
   },
   {
@@ -4514,8 +4387,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Supply chain risk log",
         "Operational risk audit"
-      ],
-      "bestNextStep": "COE (Crisis)"
+      ]
     }
   },
   {
@@ -4549,8 +4421,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Weekly ops review agenda",
         "Leadership meeting format"
-      ],
-      "bestNextStep": "GRSI (Guide)"
+      ]
     }
   },
   {
@@ -4584,8 +4455,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Major incident postmortem",
         "Product launch retro"
-      ],
-      "bestNextStep": "TMVP (Template)"
+      ]
     }
   },
   {
@@ -4619,8 +4489,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Call center scheduling",
         "Retail shift policy"
-      ],
-      "bestNextStep": "LC1 (Load)"
+      ]
     }
   },
   {
@@ -4654,8 +4523,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "B2B 90-day journey map",
         "SaaS onboarding checklist"
-      ],
-      "bestNextStep": "HSCPC (Help)"
+      ]
     }
   },
   {
@@ -4689,8 +4557,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Help center article gen",
         "Top 50 issue FAQ"
-      ],
-      "bestNextStep": "CC2 (Change)"
+      ]
     }
   },
   {
@@ -4724,8 +4591,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "System rollout comms",
         "Process change FAQ"
-      ],
-      "bestNextStep": "WKVP (Wiki)"
+      ]
     }
   },
   {
@@ -4759,8 +4625,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Single-source metric doc",
         "Data pipeline dictionary"
-      ],
-      "bestNextStep": "SA1 (Script)"
+      ]
     }
   },
   {
@@ -4794,8 +4659,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "CSV to DB sync script",
         "Daily report automation"
-      ],
-      "bestNextStep": "DD1 (Dictionary)"
+      ]
     }
   },
   {
@@ -4829,8 +4693,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Supplier failure plan",
         "Disaster recovery ops"
-      ],
-      "bestNextStep": "PS1 (Protocol)"
+      ]
     }
   },
   {
@@ -4864,8 +4727,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "13-week cash flow design",
         "Liquidity audit"
-      ],
-      "bestNextStep": "VB1 (Variance)"
+      ]
     }
   },
   {
@@ -4899,8 +4761,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Monthly budget review",
         "Departmental spend audit"
-      ],
-      "bestNextStep": "MUESI (Margin)"
+      ]
     }
   },
   {
@@ -4934,8 +4795,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "LTV/CAC by segment",
         "Contribution margin audit"
-      ],
-      "bestNextStep": "EMVP (Elastic)"
+      ]
     }
   },
   {
@@ -4969,8 +4829,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Price point testing",
         "Elasticity scenario modeling"
-      ],
-      "bestNextStep": "LPC (Ledger)"
+      ]
     }
   },
   {
@@ -5004,8 +4863,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Cash preservation strategy",
         "Vendor payment prioritization"
-      ],
-      "bestNextStep": "CR2 (Collect)"
+      ]
     }
   },
   {
@@ -5039,8 +4897,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Overdue account recovery",
         "AR outreach standardization"
-      ],
-      "bestNextStep": "UICPC (Update)"
+      ]
     }
   },
   {
@@ -5074,8 +4931,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Monthly investor email",
         "Board update structure"
-      ],
-      "bestNextStep": "DKVP (Dashboard)"
+      ]
     }
   },
   {
@@ -5109,8 +4965,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "CFO dashboard design",
         "Financial metric standardization"
-      ],
-      "bestNextStep": "SSR2 (Scenario)"
+      ]
     }
   },
   {
@@ -5144,8 +4999,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Hiring & Runway simulation",
         "Growth path evaluation"
-      ],
-      "bestNextStep": "CESI (Cap)"
+      ]
     }
   },
   {
@@ -5179,8 +5033,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Funding round simulation",
         "Option pool dilution audit"
-      ],
-      "bestNextStep": "PE1 (Policy)"
+      ]
     }
   },
   {
@@ -5214,8 +5067,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Hybrid work expense policy",
         "Spend control audit"
-      ],
-      "bestNextStep": "GFOE (Grant)"
+      ]
     }
   },
   {
@@ -5249,8 +5101,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Non-dilutive funding proposal",
         "Grant alignment narrative"
-      ],
-      "bestNextStep": "PACPC (Prep)"
+      ]
     }
   },
   {
@@ -5284,8 +5135,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "First-time audit prep",
         "Annual financial audit"
-      ],
-      "bestNextStep": "MSR2 (Matrix)"
+      ]
     }
   },
   {
@@ -5319,8 +5169,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Spend threshold policy",
         "Procurement authority mapping"
-      ],
-      "bestNextStep": "OTR (Organizer)"
+      ]
     }
   },
   {
@@ -5354,8 +5203,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Year-end tax prep",
         "CPA handoff organization"
-      ],
-      "bestNextStep": "FCFOE (Forecast)"
+      ]
     }
   },
   {
@@ -5389,8 +5237,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Head of Growth definition",
         "Engineering role scorecard"
-      ],
-      "bestNextStep": "ISI (Interview)"
+      ]
     }
   },
   {
@@ -5424,8 +5271,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Technical interview guides",
         "Sales competency questions"
-      ],
-      "bestNextStep": "OITR (Onboard)"
+      ]
     }
   },
   {
@@ -5459,8 +5305,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "New hire 90-day plan",
         "Manager onboarding guide"
-      ],
-      "bestNextStep": "RESI (Review)"
+      ]
     }
   },
   {
@@ -5494,8 +5339,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Annual performance review",
         "Quarterly feedback form"
-      ],
-      "bestNextStep": "GDHPC (Growth)"
+      ]
     }
   },
   {
@@ -5529,8 +5373,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Engineering growth curriculum",
         "Sales skill development"
-      ],
-      "bestNextStep": "LMVP (Ladder)"
+      ]
     }
   },
   {
@@ -5564,8 +5407,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Founding values doc",
         "Employee handbook seed"
-      ],
-      "bestNextStep": "CITR (Comms)"
+      ]
     }
   },
   {
@@ -5599,8 +5441,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Org change announcement",
         "Policy update template"
-      ],
-      "bestNextStep": "CVP (Culture)"
+      ]
     }
   },
   {
@@ -5634,8 +5475,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Product role levels",
         "Engineering career path"
-      ],
-      "bestNextStep": "CVP (Culture)"
+      ]
     }
   },
   {
@@ -5669,8 +5509,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Standardized exit script",
         "Attrition feedback capture"
-      ],
-      "bestNextStep": "BA1 (Brand)"
+      ]
     }
   },
   {
@@ -5704,8 +5543,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Employee spotlight posts",
         "Recruiting campaign copy"
-      ],
-      "bestNextStep": "SRDHPC (Scorecard)"
+      ]
     }
   },
   {
@@ -5739,8 +5577,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "2-page product manifesto",
         "Company-wide vision alignment"
-      ],
-      "bestNextStep": "SR2 (Spec)"
+      ]
     }
   },
   {
@@ -5774,8 +5611,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Feature requirement doc",
         "Engineering alignment spec"
-      ],
-      "bestNextStep": "IR2 (Insight)"
+      ]
     }
   },
   {
@@ -5809,8 +5645,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "UX research synthesis",
         "Persona-based insight report"
-      ],
-      "bestNextStep": "LI1 (Landscape)"
+      ]
     }
   },
   {
@@ -5844,8 +5679,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Quarterly strategy review",
         "Market segment mapping"
-      ],
-      "bestNextStep": "MSI (Memo)"
+      ]
     }
   },
   {
@@ -5879,8 +5713,7 @@ export const NEXUS_AGENTS: NexusAgent[] = [
       "useCases": [
         "Quarterly strategy memo",
         "All-hands strategy deck"
-      ],
-      "bestNextStep": "MVP (Manifesto)"
+      ]
     }
   }
 ];

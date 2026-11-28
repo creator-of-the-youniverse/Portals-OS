@@ -13,6 +13,22 @@
 
 export type YouniverseIdentityType = "person" | "agent";
 
+export const PUBLIC_YOUNIVERSE_IDENTITY_FIELDS = Object.freeze([
+  "username",
+  "displayName",
+  "subdomain",
+  "identityType",
+  "createdAt",
+] as const);
+
+export interface PublicYouniverseIdentity {
+  username: string;
+  displayName: string;
+  subdomain: string;
+  identityType: YouniverseIdentityType;
+  createdAt: string;
+}
+
 export interface YouniverseIdentityRecord {
   identityId: string;
   username: string;

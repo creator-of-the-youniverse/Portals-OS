@@ -17,14 +17,26 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { assertSafeDatabaseTarget } from "../lib/creatorOwnership.ts";
 
-const prisma = new PrismaClient();
+let cachedPrisma = null;
+
+function getPrismaClient(env = process.env) {
+  assertSafeDatabaseTarget(env?.DATABASE_URL, env);
+  assertSafeDatabaseTarget(env?.DATABASE_URL_UNPOOLED, env);
+  assertSafeDatabaseTarget(process.env.DATABASE_URL, env);
+  assertSafeDatabaseTarget(process.env.DATABASE_URL_UNPOOLED, env);
+  if (!cachedPrisma) {
+    cachedPrisma = new PrismaClient();
+  }
+  return cachedPrisma;
+}
 
 /**
  * @param {import('express').Request}  req
  * @param {import('express').Response} res
  */
-export async function getYouniverseContextHandler(req, res) {
+export async function getYouniverseContextHandler(req, res, deps = {}) {
   const { handle } = req.params;
 
   if (!handle) {
@@ -35,6 +47,7 @@ export async function getYouniverseContextHandler(req, res) {
   const normalised = handle.toLowerCase().replace(/^@/, "");
 
   try {
+    const prisma = deps.prisma ?? getPrismaClient(deps.env ?? process.env);
     const youniverse = await prisma.youniverse.findUnique({
       where: { handle: normalised },
       select: {

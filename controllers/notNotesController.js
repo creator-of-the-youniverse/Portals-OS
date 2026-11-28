@@ -5,8 +5,11 @@ import {
   buildWidgetContentPayload,
   formatOwnerWidget,
   parseWidgetContent,
+  resolveProjectFieldsFromBody,
   sanitizeWidgetDependencies,
 } from "../lib/widgetLifecycle.ts";
+import { extractEntryCode } from "../lib/weaverProject.ts";
+import { archiveToBooksOs, buildWeaverBooksOsSnapshot } from "../lib/booksOsBridge.ts";
 
 function resolveSqlClient(deps = {}) {
   if (deps.sql) return deps.sql;
@@ -21,19 +24,40 @@ function resolveSqlClient(deps = {}) {
 export async function saveWeaverArtifactHandler(req, res, deps = {}) {
   try {
     const { youniverseId } = req.user ?? {}; // Injected by verifyJwt middleware
-    const { title, code, dependencies } = req.body ?? {};
-
-    if (!title || !String(title).trim() || !code || !String(code).trim()) {
-      return res.status(400).json({ error: "Component title and code are required." });
-    }
+    const body = req.body ?? {};
+    const { title, dependencies } = body;
 
     if (!youniverseId) {
       return res.status(401).json({ error: "Unauthorized: No youniverseId found in session." });
     }
 
+    const projectRes = resolveProjectFieldsFromBody(body, null);
+    if (!projectRes.ok) {
+      return res.status(projectRes.status).json({
+        success: false,
+        error: projectRes.error,
+        message: projectRes.message,
+      });
+    }
+
+    const rawCode = typeof body.code === "string" ? body.code : "";
+    const code = rawCode.trim()
+      ? rawCode
+      : projectRes.files
+        ? extractEntryCode(projectRes.files, projectRes.entryFile)
+        : "";
+
+    if (!title || !String(title).trim() || !code || !String(code).trim()) {
+      return res.status(400).json({ error: "Component title and code are required." });
+    }
+
     const content = buildWidgetContentPayload({
       code,
       dependencies,
+      files: projectRes.files,
+      entryFile: projectRes.entryFile,
+      iterations: projectRes.iterations,
+      sandboxConfig: projectRes.sandboxConfig,
       publicationStatus: "draft",
       publishedAt: null,
       unpublishedAt: null,
@@ -186,12 +210,33 @@ export async function getWeavedWidgetsHandler(req, res, deps = {}) {
 
 async function mutateOwnedWidget(req, res, deps = {}, mode = "update") {
   try {
-    const { youniverseId } = req.user ?? {};
+    const { youniverseId, handle } = req.user ?? {};
     if (!youniverseId) {
       return res.status(401).json({ success: false, error: "Unauthorized: No youniverseId found." });
     }
 
     const body = req.body ?? {};
+    const rawRequestedHandle = body.targetHandle ?? body.handle ?? body.publishTarget;
+    if (
+      handle &&
+      typeof rawRequestedHandle === "string" &&
+      rawRequestedHandle.trim().length > 0
+    ) {
+      const normalizedTarget = rawRequestedHandle
+        .trim()
+        .toLowerCase()
+        .replace(/^@/, "")
+        .replace(/^https?:\/\//, "")
+        .split(".")[0];
+      if (normalizedTarget !== String(handle).toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          error: "forbidden_youniverse_publish_target",
+          message:
+            "Weaver artifacts are strictly scoped to the active authenticated Youniverse and cannot publish to another handle or external subdomain.",
+        });
+      }
+    }
     const rawId = body.id ?? body.widgetId;
     const widgetId = typeof rawId === "string" ? rawId.trim() : "";
     if (!widgetId) {
@@ -229,8 +274,30 @@ async function mutateOwnedWidget(req, res, deps = {}, mode = "update") {
 
     const nowIso = new Date().toISOString();
     const nextTitle = body.title !== undefined ? String(body.title).trim() : String(existing.title ?? "").trim();
-    const nextCode = body.code !== undefined ? String(body.code) : parsed.code;
+    let nextCode = body.code !== undefined ? String(body.code) : parsed.code;
     const nextDeps = body.dependencies !== undefined ? sanitizeWidgetDependencies(body.dependencies) : parsed.dependencies;
+    let nextFiles = parsed.schemaVersion === 2 ? parsed.files : undefined;
+    let nextEntryFile = parsed.entryFile;
+    let nextIterations = parsed.iterations;
+    let nextSandboxConfig = parsed.sandboxConfig;
+
+    if (mode !== "unpublish") {
+      const projectRes = resolveProjectFieldsFromBody(body, parsed);
+      if (!projectRes.ok) {
+        return res.status(projectRes.status).json({
+          success: false,
+          error: projectRes.error,
+          message: projectRes.message,
+        });
+      }
+      nextFiles = projectRes.files;
+      nextEntryFile = projectRes.entryFile ?? nextEntryFile;
+      nextIterations = projectRes.iterations ?? nextIterations;
+      nextSandboxConfig = projectRes.sandboxConfig ?? nextSandboxConfig;
+      if (nextFiles) {
+        nextCode = extractEntryCode(nextFiles, nextEntryFile);
+      }
+    }
 
     if (!nextTitle || !nextCode.trim()) {
       return res.status(400).json({
@@ -243,6 +310,8 @@ async function mutateOwnedWidget(req, res, deps = {}, mode = "update") {
     let nextPubStatus = parsed.publicationStatus;
     let nextPublishedAt = parsed.publishedAt;
     let nextUnpublishedAt = parsed.unpublishedAt;
+    let nextBooksOsArchive = parsed.booksOsArchive ?? null;
+    let archiveResult = null;
 
     if (mode === "publish") {
       nextPubStatus = "published";
@@ -253,12 +322,55 @@ async function mutateOwnedWidget(req, res, deps = {}, mode = "update") {
       nextUnpublishedAt = nowIso;
     }
 
+    const shouldArchiveToBooksOs =
+      mode === "archive" || (mode === "publish" && body.archiveToBooksOs === true);
+
+    if (shouldArchiveToBooksOs) {
+      const resolvedFiles = nextFiles ?? parsed.files;
+      const snapshot = buildWeaverBooksOsSnapshot({
+        sourceArtifactId: widgetId,
+        title: nextTitle,
+        files: resolvedFiles,
+        entryFile: nextEntryFile,
+        dependencies: nextDeps,
+        iterations: nextIterations,
+        summary: typeof body.summary === "string" ? body.summary : null,
+        includePromptHistory: body.includePromptHistory === true,
+      });
+
+      const entryType =
+        body.entryType === "notnote_artifact" || body.entryType === "daily_record"
+          ? body.entryType
+          : "weaver_app_snapshot";
+
+      archiveResult = await archiveToBooksOs(
+        {
+          youniverseId,
+          entryType,
+          title: nextTitle,
+          summary: snapshot.summary,
+          bodyMarkdown: snapshot.bodyMarkdown,
+          payloadJson: snapshot.payloadJson,
+          sourceArtifactId: widgetId,
+          coordinates: body.coordinates ?? body.location,
+          timestamp: typeof body.timestamp === "string" ? body.timestamp : undefined,
+        },
+        { sql, env: deps.env, fetch: deps.fetch }
+      );
+      nextBooksOsArchive = archiveResult.badge;
+    }
+
     const nextContent = buildWidgetContentPayload({
       code: nextCode,
       dependencies: nextDeps,
+      files: nextFiles,
+      entryFile: nextEntryFile,
+      iterations: nextIterations,
+      sandboxConfig: nextSandboxConfig,
       publicationStatus: nextPubStatus,
       publishedAt: nextPublishedAt,
       unpublishedAt: nextUnpublishedAt,
+      booksOsArchive: nextBooksOsArchive,
     });
 
     await sql`
@@ -287,6 +399,13 @@ async function mutateOwnedWidget(req, res, deps = {}, mode = "update") {
       success: true,
       artifact: formatted,
       widget: formatted,
+      ...(archiveResult
+        ? {
+            archive: archiveResult.record,
+            badge: archiveResult.badge,
+            deduplicated: archiveResult.deduplicated,
+          }
+        : {}),
     });
   } catch (error) {
     console.error("NotNotes Mutate Error:", error);
@@ -304,4 +423,65 @@ export async function publishWeaverWidgetHandler(req, res, deps = {}) {
 
 export async function unpublishWeaverWidgetHandler(req, res, deps = {}) {
   return mutateOwnedWidget(req, res, deps, "unpublish");
+}
+
+export async function archiveWeaverArtifactHandler(req, res, deps = {}) {
+  const body = req.body ?? {};
+  const rawId = body.id ?? body.widgetId;
+  const widgetId = typeof rawId === "string" ? rawId.trim() : "";
+
+  if (!widgetId) {
+    try {
+      const { youniverseId } = req.user ?? {};
+      if (!youniverseId) {
+        return res.status(401).json({ success: false, error: "Unauthorized: No youniverseId found." });
+      }
+      const entryType =
+        body.entryType === "daily_record" || body.entryType === "notnote_artifact"
+          ? body.entryType
+          : "notnote_artifact";
+      const standaloneTitle = typeof body.title === "string" ? body.title.trim() : "";
+      const bodyMarkdown = typeof body.bodyMarkdown === "string" ? body.bodyMarkdown : "";
+      const summary = typeof body.summary === "string" ? body.summary.trim() : "";
+      if (!standaloneTitle || (!bodyMarkdown.trim() && !summary)) {
+        return res.status(400).json({
+          success: false,
+          error: "bad_request",
+          message: "Either widget id or (title + bodyMarkdown/summary) is required to archive.",
+        });
+      }
+      const sql = resolveSqlClient(deps);
+      const archiveRes = await archiveToBooksOs(
+        {
+          youniverseId,
+          entryType,
+          title: standaloneTitle,
+          summary: summary || null,
+          bodyMarkdown: bodyMarkdown || summary,
+          payloadJson:
+            body.payloadJson && typeof body.payloadJson === "object" && !Array.isArray(body.payloadJson)
+              ? body.payloadJson
+              : { kind: entryType, title: standaloneTitle, summary },
+          sourceArtifactId:
+            typeof body.sourceArtifactId === "string" && body.sourceArtifactId.trim()
+              ? body.sourceArtifactId.trim()
+              : null,
+          coordinates: body.coordinates ?? body.location,
+          timestamp: typeof body.timestamp === "string" ? body.timestamp : undefined,
+        },
+        { sql, env: deps.env, fetch: deps.fetch }
+      );
+      return res.status(200).json({
+        success: true,
+        deduplicated: archiveRes.deduplicated,
+        archive: archiveRes.record,
+        badge: archiveRes.badge,
+      });
+    } catch (error) {
+      console.error("NotNotes Archive Error:", error);
+      return res.status(500).json({ success: false, error: "Internal server error." });
+    }
+  }
+
+  return mutateOwnedWidget(req, res, deps, "archive");
 }

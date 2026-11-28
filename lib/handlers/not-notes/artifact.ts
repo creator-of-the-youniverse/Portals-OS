@@ -8,6 +8,7 @@
  *   - POST /api/not-notes/update    -> alias for widget update
  *   - POST /api/not-notes/publish   -> explicitly publishes an owned widget
  *   - POST /api/not-notes/unpublish -> explicitly unpublishes an owned widget (keeps private draft)
+ *   - POST /api/not-notes/archive   -> commits an owned widget or NotNotes artifact to Books OS
  */
 
 import { neon } from "@neondatabase/serverless";
@@ -18,10 +19,24 @@ import {
   buildWidgetContentPayload,
   formatOwnerWidget,
   parseWidgetContent,
+  resolveProjectFieldsFromBody,
   sanitizeWidgetDependencies,
 } from "../../widgetLifecycle.ts";
+import { extractEntryCode } from "../../weaverProject.ts";
+import {
+  archiveToBooksOs,
+  buildWeaverBooksOsSnapshot,
+  type BooksOsArchiveResult,
+  type BooksOsEntryType,
+} from "../../booksOsBridge.ts";
 
-export type ArtifactOperation = "create" | "update" | "publish" | "unpublish";
+export type ArtifactOperation =
+  | "create"
+  | "update"
+  | "publish"
+  | "unpublish"
+  | "archive"
+  | "save_deliverable";
 
 function resolveOperation(
   req: any,
@@ -63,14 +78,16 @@ function resolveOperation(
       rawAction === "create" ||
       rawAction === "update" ||
       rawAction === "publish" ||
-      rawAction === "unpublish"
+      rawAction === "unpublish" ||
+      rawAction === "archive" ||
+      rawAction === "save_deliverable"
     ) {
-      if (rawAction === "create" && method !== "POST") {
+      if ((rawAction === "create" || rawAction === "save_deliverable") && method !== "POST") {
         return {
           ok: false,
           status: 405,
           error: "method_not_allowed",
-          message: "Create operation requires POST.",
+          message: `${rawAction} operation requires POST.`,
         };
       }
       return { ok: true, operation: rawAction };
@@ -79,7 +96,8 @@ function resolveOperation(
       ok: false,
       status: 400,
       error: "invalid_action",
-      message: "action must be one of create, update, publish, or unpublish.",
+      message:
+        "action must be one of create, update, publish, unpublish, archive, or save_deliverable.",
     };
   }
 
@@ -158,13 +176,131 @@ export default async function handler(req: any, res: any, deps: any = {}) {
   const operation = opRes.operation;
   const body = req.body ?? {};
 
+  // Strict owner -> active Youniverse boundary: reject any explicit targetHandle/handle
+  // mismatch so Weaver builds can NEVER publish to another handle or agent subdomain.
+  const rawRequestedHandle = body.targetHandle ?? body.handle ?? body.publishTarget;
+  if (typeof rawRequestedHandle === "string" && rawRequestedHandle.trim().length > 0) {
+    const normalizedTarget = rawRequestedHandle
+      .trim()
+      .toLowerCase()
+      .replace(/^@/, "")
+      .replace(/^https?:\/\//, "")
+      .split(".")[0];
+    if (normalizedTarget !== auth.user.handle.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        error: "forbidden_youniverse_publish_target",
+        message:
+          "Weaver artifacts are strictly scoped to the active authenticated Youniverse and cannot publish to another handle or external subdomain.",
+      });
+    }
+  }
+
   try {
     const sql = deps.sql ?? neon(databaseUrl!);
+
+    // ── SAVE REAL AGENT PWA DELIVERABLE TO NOTNOTES ─────────────────────────
+    if (operation === "save_deliverable") {
+      const agentId = typeof body.agentId === "string" ? body.agentId.trim().toUpperCase() : "";
+      const agentName = typeof body.agentName === "string" ? body.agentName.trim() : "";
+      const agentRole = typeof body.agentRole === "string" ? body.agentRole.trim() : "";
+      const agentUrl = typeof body.agentUrl === "string" ? body.agentUrl.trim() : "";
+      const rawDeliverableContent =
+        typeof body.content === "string"
+          ? body.content
+          : typeof body.bodyMarkdown === "string"
+            ? body.bodyMarkdown
+            : "";
+      const deliverableContent = rawDeliverableContent.trim();
+
+      if (!agentId || !deliverableContent) {
+        return res.status(400).json({
+          success: false,
+          error: "bad_request",
+          message: "agentId and deliverable content are required.",
+        });
+      }
+      if (deliverableContent.length > 50_000) {
+        return res.status(413).json({
+          success: false,
+          error: "payload_too_large",
+          message: "Deliverable content exceeds 50,000 character limit.",
+        });
+      }
+
+      const notNoteId = `nn_${nanoid(14)}`;
+      const nowIso = new Date().toISOString();
+      const title =
+        typeof body.title === "string" && body.title.trim()
+          ? body.title.trim().slice(0, 140)
+          : `${agentName || agentId}${agentRole ? ` (${agentRole})` : ""} Deliverable`;
+
+      const contentPayload = {
+        type: "AGENT_DELIVERABLE",
+        agentId,
+        agentName: agentName || agentId,
+        agentRole,
+        agentUrl,
+        bodyMarkdown: deliverableContent,
+        createdAt: nowIso,
+      };
+
+      await sql`
+        INSERT INTO "NotNote" (
+          id,
+          "youniverseId",
+          title,
+          content,
+          status,
+          "createdAt",
+          "updatedAt"
+        )
+        VALUES (
+          ${notNoteId},
+          ${auth.user.youniverseId},
+          ${title},
+          ${JSON.stringify(contentPayload)},
+          'APPROVED',
+          NOW(),
+          NOW()
+        )
+      `;
+
+      return res.status(200).json({
+        success: true,
+        deliverable: {
+          notNoteId,
+          youniverseId: auth.user.youniverseId,
+          agentId,
+          agentName: agentName || agentId,
+          agentRole,
+          agentUrl,
+          title,
+          content: deliverableContent,
+          createdAt: nowIso,
+        },
+      });
+    }
 
     // ── CREATE PRIVATE DRAFT ────────────────────────────────────────────────
     if (operation === "create") {
       const title = typeof body.title === "string" ? body.title.trim() : "";
-      const code = typeof body.code === "string" ? body.code : "";
+      const projectRes = resolveProjectFieldsFromBody(body, null);
+      if (!projectRes.ok) {
+        const errRes = projectRes as { ok: false; status: 400 | 413; error: string; message: string };
+        return res.status(errRes.status).json({
+          success: false,
+          error: errRes.error,
+          message: errRes.message,
+        });
+      }
+
+      const rawCode = typeof body.code === "string" ? body.code : "";
+      const code = rawCode.trim()
+        ? rawCode
+        : projectRes.files
+          ? extractEntryCode(projectRes.files, projectRes.entryFile)
+          : "";
       if (!title || !code.trim()) {
         return res.status(400).json({
           success: false,
@@ -180,6 +316,10 @@ export default async function handler(req: any, res: any, deps: any = {}) {
       const content = buildWidgetContentPayload({
         code,
         dependencies: body.dependencies,
+        files: projectRes.files,
+        entryFile: projectRes.entryFile,
+        iterations: projectRes.iterations,
+        sandboxConfig: projectRes.sandboxConfig,
         publicationStatus: "draft",
         publishedAt: null,
         unpublishedAt: null,
@@ -226,9 +366,57 @@ export default async function handler(req: any, res: any, deps: any = {}) {
       });
     }
 
-    // ── UPDATE / PUBLISH / UNPUBLISH EXISTING WIDGET ────────────────────────
+    // ── ARCHIVE STANDALONE NOTNOTE / DAILY RECORD (NO WIDGET ID) ───────────
     const rawId = body.id ?? body.widgetId;
     const widgetId = typeof rawId === "string" ? rawId.trim() : "";
+
+    if (operation === "archive" && !widgetId) {
+      const requestedEntryType: BooksOsEntryType =
+        body.entryType === "daily_record" || body.entryType === "notnote_artifact"
+          ? body.entryType
+          : "notnote_artifact";
+      const standaloneTitle = typeof body.title === "string" ? body.title.trim() : "";
+      const bodyMarkdown = typeof body.bodyMarkdown === "string" ? body.bodyMarkdown : "";
+      const summary = typeof body.summary === "string" ? body.summary.trim() : "";
+
+      if (!standaloneTitle || (!bodyMarkdown.trim() && !summary)) {
+        return res.status(400).json({
+          success: false,
+          error: "bad_request",
+          message: "Either widget id or (title + bodyMarkdown/summary) is required to archive.",
+        });
+      }
+
+      const archiveRes = await archiveToBooksOs(
+        {
+          youniverseId: auth.user.youniverseId,
+          entryType: requestedEntryType,
+          title: standaloneTitle,
+          summary: summary || null,
+          bodyMarkdown: bodyMarkdown || summary,
+          payloadJson:
+            body.payloadJson && typeof body.payloadJson === "object" && !Array.isArray(body.payloadJson)
+              ? body.payloadJson
+              : { kind: requestedEntryType, title: standaloneTitle, summary },
+          sourceArtifactId:
+            typeof body.sourceArtifactId === "string" && body.sourceArtifactId.trim()
+              ? body.sourceArtifactId.trim()
+              : null,
+          coordinates: body.coordinates ?? body.location,
+          timestamp: typeof body.timestamp === "string" ? body.timestamp : undefined,
+        },
+        { sql, env: deps.env, fetch: deps.fetch }
+      );
+
+      return res.status(200).json({
+        success: true,
+        deduplicated: archiveRes.deduplicated,
+        archive: archiveRes.record,
+        badge: archiveRes.badge,
+      });
+    }
+
+    // ── UPDATE / PUBLISH / UNPUBLISH / ARCHIVE EXISTING WIDGET ──────────────
     if (!widgetId) {
       return res.status(400).json({
         success: false,
@@ -274,9 +462,15 @@ export default async function handler(req: any, res: any, deps: any = {}) {
     let nextTitle = String(existing.title ?? "").trim();
     let nextCode = parsedExisting.code;
     let nextDeps = parsedExisting.dependencies;
+    let nextFiles = parsedExisting.schemaVersion === 2 ? parsedExisting.files : undefined;
+    let nextEntryFile = parsedExisting.entryFile;
+    let nextIterations = parsedExisting.iterations;
+    let nextSandboxConfig = parsedExisting.sandboxConfig;
     let nextPubStatus = parsedExisting.publicationStatus;
     let nextPublishedAt = parsedExisting.publishedAt;
     let nextUnpublishedAt = parsedExisting.unpublishedAt;
+    let nextBooksOsArchive = parsedExisting.booksOsArchive;
+    let archiveResult: BooksOsArchiveResult | null = null;
 
     if (operation === "update") {
       if (body.title !== undefined) {
@@ -302,6 +496,24 @@ export default async function handler(req: any, res: any, deps: any = {}) {
       if (body.dependencies !== undefined) {
         nextDeps = sanitizeWidgetDependencies(body.dependencies);
       }
+
+      const projectRes = resolveProjectFieldsFromBody(body, parsedExisting);
+      if (!projectRes.ok) {
+        const errRes = projectRes as { ok: false; status: 400 | 413; error: string; message: string };
+        return res.status(errRes.status).json({
+          success: false,
+          error: errRes.error,
+          message: errRes.message,
+        });
+      }
+      nextFiles = projectRes.files;
+      nextEntryFile = projectRes.entryFile ?? nextEntryFile;
+      nextIterations = projectRes.iterations ?? nextIterations;
+      nextSandboxConfig = projectRes.sandboxConfig ?? nextSandboxConfig;
+      if (nextFiles) {
+        nextCode = extractEntryCode(nextFiles, nextEntryFile);
+      }
+
       if (!nextTitle || !nextCode.trim()) {
         return res.status(400).json({
           success: false,
@@ -333,6 +545,24 @@ export default async function handler(req: any, res: any, deps: any = {}) {
       if (body.dependencies !== undefined) {
         nextDeps = sanitizeWidgetDependencies(body.dependencies);
       }
+
+      const projectRes = resolveProjectFieldsFromBody(body, parsedExisting);
+      if (!projectRes.ok) {
+        const errRes = projectRes as { ok: false; status: 400 | 413; error: string; message: string };
+        return res.status(errRes.status).json({
+          success: false,
+          error: errRes.error,
+          message: errRes.message,
+        });
+      }
+      nextFiles = projectRes.files;
+      nextEntryFile = projectRes.entryFile ?? nextEntryFile;
+      nextIterations = projectRes.iterations ?? nextIterations;
+      nextSandboxConfig = projectRes.sandboxConfig ?? nextSandboxConfig;
+      if (nextFiles) {
+        nextCode = extractEntryCode(nextFiles, nextEntryFile);
+      }
+
       if (!nextTitle || !nextCode.trim()) {
         return res.status(400).json({
           success: false,
@@ -346,14 +576,82 @@ export default async function handler(req: any, res: any, deps: any = {}) {
     } else if (operation === "unpublish") {
       nextPubStatus = "unpublished";
       nextUnpublishedAt = nowIso;
+    } else if (operation === "archive") {
+      if (body.title !== undefined && typeof body.title === "string" && body.title.trim()) {
+        nextTitle = body.title.trim();
+      }
+      if (body.files !== undefined || body.code !== undefined || body.dependencies !== undefined) {
+        if (body.dependencies !== undefined) {
+          nextDeps = sanitizeWidgetDependencies(body.dependencies);
+        }
+        const projectRes = resolveProjectFieldsFromBody(body, parsedExisting);
+        if (!projectRes.ok) {
+          const errRes = projectRes as { ok: false; status: 400 | 413; error: string; message: string };
+          return res.status(errRes.status).json({
+            success: false,
+            error: errRes.error,
+            message: errRes.message,
+          });
+        }
+        nextFiles = projectRes.files;
+        nextEntryFile = projectRes.entryFile ?? nextEntryFile;
+        nextIterations = projectRes.iterations ?? nextIterations;
+        nextSandboxConfig = projectRes.sandboxConfig ?? nextSandboxConfig;
+        if (nextFiles) {
+          nextCode = extractEntryCode(nextFiles, nextEntryFile);
+        }
+      }
+    }
+
+    const shouldArchiveToBooksOs =
+      operation === "archive" || (operation === "publish" && body.archiveToBooksOs === true);
+
+    if (shouldArchiveToBooksOs) {
+      const resolvedFiles = nextFiles ?? parsedExisting.files;
+      const snapshot = buildWeaverBooksOsSnapshot({
+        sourceArtifactId: widgetId,
+        title: nextTitle,
+        files: resolvedFiles,
+        entryFile: nextEntryFile,
+        dependencies: nextDeps,
+        iterations: nextIterations,
+        summary: typeof body.summary === "string" ? body.summary : null,
+        includePromptHistory: body.includePromptHistory === true,
+      });
+
+      const entryType: BooksOsEntryType =
+        body.entryType === "notnote_artifact" || body.entryType === "daily_record"
+          ? body.entryType
+          : "weaver_app_snapshot";
+
+      archiveResult = await archiveToBooksOs(
+        {
+          youniverseId: auth.user.youniverseId,
+          entryType,
+          title: nextTitle,
+          summary: snapshot.summary,
+          bodyMarkdown: snapshot.bodyMarkdown,
+          payloadJson: snapshot.payloadJson,
+          sourceArtifactId: widgetId,
+          coordinates: body.coordinates ?? body.location,
+          timestamp: typeof body.timestamp === "string" ? body.timestamp : undefined,
+        },
+        { sql, env: deps.env, fetch: deps.fetch }
+      );
+      nextBooksOsArchive = archiveResult.badge;
     }
 
     const nextContent = buildWidgetContentPayload({
       code: nextCode,
       dependencies: nextDeps,
+      files: nextFiles,
+      entryFile: nextEntryFile,
+      iterations: nextIterations,
+      sandboxConfig: nextSandboxConfig,
       publicationStatus: nextPubStatus,
       publishedAt: nextPublishedAt,
       unpublishedAt: nextUnpublishedAt,
+      booksOsArchive: nextBooksOsArchive,
     });
 
     await sql`
@@ -382,6 +680,13 @@ export default async function handler(req: any, res: any, deps: any = {}) {
       success: true,
       artifact: formatted,
       widget: formatted,
+      ...(archiveResult
+        ? {
+            archive: archiveResult.record,
+            badge: archiveResult.badge,
+            deduplicated: archiveResult.deduplicated,
+          }
+        : {}),
     });
   } catch (error) {
     console.error("[NotNotes Artifact] Error:", error);

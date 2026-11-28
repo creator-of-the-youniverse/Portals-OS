@@ -42,6 +42,12 @@ import {
 } from "../../creatorOwnership.ts";
 import { resolveHumanYouniverseAccess } from "../../humanContinuity.ts";
 
+const HANDOFF_UNAVAILABLE_BODY = {
+  success: false,
+  error: "handoff_unavailable",
+  message: "Unable to issue secure handoff ticket right now. Please retry.",
+} as const;
+
 export default async function handler(req: any, res: any, deps: any = {}) {
   if (req.method !== "GET") {
     return res.status(405).json({ success: false, error: "method_not_allowed" });
@@ -281,18 +287,29 @@ export default async function handler(req: any, res: any, deps: any = {}) {
 
     const nonce = randomBytes(24).toString("hex");
     const handoffExpiresAt = new Date(Date.now() + 90 * 1000);
-    await sql`
-      INSERT INTO handoff_tokens (
-        handle,
-        nonce,
-        expires_at
-      )
-      VALUES (
-        ${String(youniverse.username)},
-        ${nonce},
-        ${handoffExpiresAt.toISOString()}
-      )
-    `;
+    try {
+      await sql`
+        INSERT INTO handoff_tokens (
+          handle,
+          nonce,
+          expires_at
+        )
+        VALUES (
+          ${String(youniverse.username)},
+          ${nonce},
+          ${handoffExpiresAt.toISOString()}
+        )
+      `;
+    } catch (handoffDbErr: any) {
+      console.error("[YouCtx] Handoff nonce persistence failed.", {
+        code: typeof handoffDbErr?.code === "string" ? handoffDbErr.code : null,
+        constraint: typeof handoffDbErr?.constraint === "string" ? handoffDbErr.constraint : null,
+      });
+      if (typeof res.setHeader === "function") {
+        res.setHeader("Cache-Control", "no-store");
+      }
+      return res.status(500).json(HANDOFF_UNAVAILABLE_BODY);
+    }
 
     const handoffToken = signHandoffTokenFn({
       handle: String(youniverse.username),

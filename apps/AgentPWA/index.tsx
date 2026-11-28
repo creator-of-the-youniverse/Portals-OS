@@ -13,6 +13,9 @@ interface AgentPWAProps {
     url?: string;
     agentName?: string;
     agentRole?: string;
+    inputNeeded?: string;
+    returnTarget?: string;
+    initialTab?: string;
   };
 }
 
@@ -36,7 +39,9 @@ const AgentPWA: React.FC<AgentPWAProps> = ({ metadata }) => {
   const squad = NEXUS_SQUADS.find(s => s.id === agent.squadId);
   const squadOperatives = squad ? NEXUS_AGENTS.filter(a => squad.agentIds.includes(a.id)) : [agent];
   
-  const [activeTab, setActiveTab] = useState('AGENT OVERVIEW');
+  const [activeTab, setActiveTab] = useState(
+    metadata?.initialTab || (metadata?.url ? 'ACTIVE TERMINAL' : 'AGENT OVERVIEW')
+  );
   const [iframeLoaded, setIframeLoaded] = useState(false);
   
   // Deterministic mock metrics based on agent id
@@ -280,11 +285,11 @@ const AgentPWA: React.FC<AgentPWAProps> = ({ metadata }) => {
                   </div>
                 )}
                 <iframe
-                  src={agent.url || metadata?.url}
+                  src={metadata?.url || agent.url}
                   className="w-full h-full border-0 bg-transparent"
                   onLoad={() => setIframeLoaded(true)}
                   allow="clipboard-write; microphone; camera; display-capture"
-                  title="Agent Terminal"
+                  title={`${agent.name} · ${agent.role} PWA`}
                 />
               </>
             )}

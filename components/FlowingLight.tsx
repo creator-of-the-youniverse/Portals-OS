@@ -54,7 +54,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
     const lastChatTimeRef = useRef(0);
     const currentElementRef = useRef<HTMLElement | null>(null);
 
-    // Global Hover Context Logic for ONE
+    // Global Hover Context Logic for Atom
     const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
     const lastHoveredElementRef = useRef<HTMLElement | null>(null);
     const explainedContextsRef = useRef<Set<string>>(new Set());
@@ -66,7 +66,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
         const handleMouseOver = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
 
-            // Skip if hovering over the canvas or chat messages (ONE's container)
+            // Skip if hovering over the canvas or chat messages (Atom's container)
             if (target.closest('canvas') || target.closest('.bg-primary')) return;
 
             // Try to find a meaningful description for the element
@@ -74,7 +74,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
 
             let el: HTMLElement | null = target;
             for (let i = 0; i < 5 && el; i++) {
-                if (el.dataset.one) { context = el.dataset.one; break; }
+                if (el.dataset.atom || el.dataset.one) { context = el.dataset.atom || el.dataset.one!; break; }
                 if (el.title) { context = el.title; break; }
                 if (el.getAttribute('aria-label')) { context = el.getAttribute('aria-label')!; break; }
                 if (el.tagName === 'BUTTON' || el.tagName === 'A') {
@@ -95,7 +95,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
             if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
             lastHoveredElementRef.current = target;
 
-            // 0.8-Second Delay — quick enough ONE feels responsive
+            // 0.8-Second Delay — quick enough Atom feels responsive
             hoverTimerRef.current = setTimeout(async () => {
                 if (!isProcessingRef.current && lastHoveredElementRef.current === target) {
                     isProcessingRef.current = true;
@@ -149,7 +149,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
             let interactiveEl: HTMLElement | null = null;
             let el: HTMLElement | null = target;
             for (let i = 0; i < 5 && el; i++) {
-                if (el.dataset.one || el.tagName === 'BUTTON' || el.tagName === 'A' || el.classList.contains('cursor-pointer') || el.getAttribute('role') === 'button') {
+                if (el.dataset.atom || el.dataset.one || el.tagName === 'BUTTON' || el.tagName === 'A' || el.classList.contains('cursor-pointer') || el.getAttribute('role') === 'button') {
                     interactiveEl = el;
                     break;
                 }
@@ -184,7 +184,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
             }
 
             // Trigger hint immediately
-            let context = interactiveEl.dataset.one || interactiveEl.title || interactiveEl.getAttribute('aria-label') || interactiveEl.innerText?.trim() || "";
+            let context = interactiveEl.dataset.atom || interactiveEl.dataset.one || interactiveEl.title || interactiveEl.getAttribute('aria-label') || interactiveEl.innerText?.trim() || "";
             if (context) {
                 try {
                     if (explainedContextsRef.current.has(context)) {
@@ -355,8 +355,8 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
         return closestPoint;
     }, [getElementEdges]);
 
-    // ONE's personality - customize messages here or connect to API
-    const getONEMessage = useCallback((element: HTMLElement): string => {
+    // Atom's personality - customize messages here or connect to API
+    const getAtomMessage = useCallback((element: HTMLElement): string => {
         // Disabled hardcoded messages to prevent confusion with actual AI
         return "";
     }, []);
@@ -365,7 +365,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
         const now = Date.now();
         if (now - lastChatTimeRef.current < 2500) return; // Shortened to 2.5 seconds
 
-        const message = getONEMessage(element);
+        const message = getAtomMessage(element);
 
         if (message) {
             const rect = element.getBoundingClientRect();
@@ -388,7 +388,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
             ]);
             lastChatTimeRef.current = now;
         }
-    }, [getONEMessage]);
+    }, [getAtomMessage]);
 
     const [isIdle, setIsIdle] = useState(false);
 
@@ -436,7 +436,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
             if (!containerRect) return;
 
             const allElements = Array.from(
-                document.querySelectorAll('button, a, input, [role="button"], [data-one]')
+                document.querySelectorAll('button, a, input, [role="button"], [data-atom], [data-one]')
             ) as HTMLElement[];
 
             const cached: CachedInteractiveElement[] = [];
@@ -638,7 +638,7 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
         return () => { unregister(); };
     }, []);
 
-    // Monitor Alignment for ONE's Commentary
+    // Monitor Alignment for Atom's Commentary
     useEffect(() => {
         if (Math.abs(alignment.score) > 30) {
             const isChaos = alignment.score < 0;
@@ -663,12 +663,12 @@ export const FlowingLight: React.FC<FlowingLightProps> = ({
         }
     }, [alignment.score]);
 
-    // ONE's welcome message on load
+    // Atom's welcome message on load
     useEffect(() => {
         const timer = setTimeout(() => {
             setChatMessages([{
                 id: 'welcome',
-                text: "I am ONE. Welcome to your OS.",
+                text: "I am Atom. Welcome to your OS.",
                 x: window.innerWidth / 2,
                 y: window.innerHeight / 2 - 100,
                 opacity: 0.7,

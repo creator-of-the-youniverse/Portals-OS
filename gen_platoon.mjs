@@ -111,7 +111,6 @@ export interface NexusAgent {
     outputDelivered: string[];
     doNotUseWhen: string[];
     useCases: string[];
-    bestNextStep: string;
   };
 }
 

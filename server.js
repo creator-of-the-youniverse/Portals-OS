@@ -13,8 +13,10 @@ import {
   updateWeaverArtifactHandler,
   publishWeaverWidgetHandler,
   unpublishWeaverWidgetHandler,
+  archiveWeaverArtifactHandler,
 } from "./controllers/notNotesController.js";
 import { getYouniversePublicDataHandler } from "./controllers/youniversePublicController.js";
+import notNotesSubmissionsHandler from "./lib/handlers/not-notes/submissions.ts";
 import { proxyBrowserHandler } from "./controllers/browserProxyController.js";
 import claimHandler from "./api/claim.ts";
 import youniverseIdentityHandler from "./api/youniverseIdentity.ts";
@@ -563,6 +565,7 @@ app.post(
     if (action === "update") return updateWeaverArtifactHandler(req, res, { sql: localSql });
     if (action === "publish") return publishWeaverWidgetHandler(req, res, { sql: localSql });
     if (action === "unpublish") return unpublishWeaverWidgetHandler(req, res, { sql: localSql });
+    if (action === "archive") return archiveWeaverArtifactHandler(req, res, { sql: localSql });
     return saveWeaverArtifactHandler(req, res, { sql: localSql });
   }
 );
@@ -580,6 +583,7 @@ app.patch(
     const action = req.body?.action;
     if (action === "publish") return publishWeaverWidgetHandler(req, res, { sql: localSql });
     if (action === "unpublish") return unpublishWeaverWidgetHandler(req, res, { sql: localSql });
+    if (action === "archive") return archiveWeaverArtifactHandler(req, res, { sql: localSql });
     return updateWeaverArtifactHandler(req, res, { sql: localSql });
   }
 );
@@ -602,10 +606,21 @@ app.post(
   (req, res) => unpublishWeaverWidgetHandler(req, res, { sql: localSql })
 );
 
+app.post(
+  "/api/not-notes/archive",
+  verifyLocalJwt,
+  (req, res) => archiveWeaverArtifactHandler(req, res, { sql: localSql })
+);
+
 app.get(
   "/api/not-notes/widgets",
   verifyLocalJwt,
   (req, res) => getWeavedWidgetsHandler(req, res, { sql: localSql })
+);
+
+app.get(
+  "/api/not-notes/submissions",
+  (req, res) => notNotesSubmissionsHandler(req, res, { sql: localSql })
 );
 
 // ============================================================================
@@ -618,10 +633,17 @@ app.get("/api/youniverse/:handle/context", async (req, res) => {
 });
 
 // ============================================================================
-// YOUNIVERSE PUBLIC DATA
-// GET /api/youniverse/:handle/public
+// YOUNIVERSE PUBLIC DATA & COLLECTION POINT CAPTURE
+// GET / POST /api/youniverse/:handle/public
 // ============================================================================
 app.get(
+  "/api/youniverse/:handle/public",
+  async (req, res) => {
+    return getYouniversePublicDataHandler(req, res, { sql: localSql });
+  }
+);
+
+app.post(
   "/api/youniverse/:handle/public",
   async (req, res) => {
     return getYouniversePublicDataHandler(req, res, { sql: localSql });

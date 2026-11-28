@@ -41,6 +41,11 @@ import {
 } from "./components/founding-angels";
 import { ensureBigBangStorageEpoch } from "./lib/storageEpoch";
 import { GenesisBadge, GenesisCeremonyModal, GenesisRegistryModal, GenesisRegistryPage } from "./components/genesis";
+import {
+  buildAllowedPortalMessageOrigins,
+  isTrustedAgentIframeSrc,
+  validatePortalWindowMessage,
+} from "./lib/windowMessageSecurity";
 
 const App: React.FC = () => {
   const windows = useKernel((state) => state.windows);
@@ -425,14 +430,37 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      const { type, agentId, agentName, content, timestamp } = event.data || {};
+      const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+      const allowedOrigins = buildAllowedPortalMessageOrigins(currentOrigin);
+      const allowedSources = new Set<unknown>();
+      if (typeof document !== "undefined") {
+        document.querySelectorAll("iframe").forEach((frame) => {
+          const src = frame.getAttribute("src");
+          if (frame.contentWindow && isTrustedAgentIframeSrc(src)) {
+            allowedSources.add(frame.contentWindow);
+          }
+        });
+      }
+
+      const validated = validatePortalWindowMessage(event, {
+        currentOrigin,
+        allowedOrigins,
+        allowedSources,
+        selfWindow: typeof window !== "undefined" ? window : undefined,
+      });
+
+      if (!validated.ok) {
+        return;
+      }
+
+      const { type, agentId, agentName, content, timestamp } = validated.message;
 
       switch (type) {
         case "SUBMIT_DELIVERABLE":
           if (content) {
             addDeliverable({
               id: Math.random().toString(36).substr(2, 9),
-              agentId: agentId || "unknown",
+              agentId,
               agentName: agentName || "Agent",
               content,
               timestamp: timestamp || new Date().toISOString(),
@@ -444,20 +472,16 @@ const App: React.FC = () => {
 
         case "AGENT_READY":
           console.log(`[KERNEL] Uplink Established: ${agentName || agentId} is online.`);
-          if (agentId) setAgentStatus(agentId, "online");
+          setAgentStatus(agentId, "online");
           break;
 
         case "AGENT_HEARTBEAT":
-          if (agentId) setAgentStatus(agentId, "online");
+          setAgentStatus(agentId, "online");
           break;
 
         case "AGENT_ERROR":
           console.error(`[KERNEL] Connection Error: ${agentId} reported a failure.`);
-          if (agentId) setAgentStatus(agentId, "error");
-          break;
-
-        default:
-          // Ignore other messages
+          setAgentStatus(agentId, "error");
           break;
       }
     };
