@@ -53,3 +53,7 @@ env.prod
 tests/*.built.cjs
 /components/CANONICAL ARCHITECTURE v2.0
 
+# Discord setup generated IDs
+scripts/discord/discord-ids.json
+
+
